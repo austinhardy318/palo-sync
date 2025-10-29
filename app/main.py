@@ -34,21 +34,37 @@ csrf = CSRFProtect(app)
 
 # Note: CSRF is enabled globally but exempted on specific routes
 
-# Configure rate limiting
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
-
-# Setup logging
+# Setup logging first (needed for Redis connection logging)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Configure rate limiting with Redis backend
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import redis
+
+# Initialize Redis connection for rate limiting
+redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+try:
+    redis_client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+    redis_client.ping()  # Test connection
+    logger.info(f"Connected to Redis at {redis_url}")
+    redis_available = True
+except Exception as e:
+    logger.warning(f"Redis connection failed ({e}). Using in-memory storage for rate limiting.")
+    redis_client = None
+    redis_available = False
+
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri=redis_url if redis_available else "memory://"
+)
+
 
 # Initialize sync manager and authenticator
 sync_manager = PanoramaSync()

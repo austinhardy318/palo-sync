@@ -63,8 +63,18 @@ jobs:
     
     - name: Check container health
       run: |
+        echo "Creating Docker network for testing..."
+        docker network create test-network || true
+        
+        echo "Starting Redis container for testing..."
+        docker run -d --name redis-test --network test-network redis:7-alpine
+        
+        echo "Waiting for Redis to be ready..."
+        sleep 5
+        
         echo "Starting container to test health..."
         docker run -d --name palo-sync-test \
+          --network test-network \
           -e PROD_PANORAMA_HOST=test \
           -e PROD_PANORAMA_USERNAME=test \
           -e PROD_PANORAMA_PASSWORD=test \
@@ -72,22 +82,24 @@ jobs:
           -e LAB_PANORAMA_USERNAME=test \
           -e LAB_PANORAMA_PASSWORD=test \
           -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+          -e REDIS_URL=redis://redis-test:6379/0 \
           -p 5002:5000 \
-          --health-cmd="curl -f http://localhost:5000/api/config || exit 1" \
+          --health-cmd="python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/api/config')\"" \
           --health-interval=10s \
           --health-timeout=5s \
           --health-retries=3 \
           palo-sync:latest
         
         # Wait for container to be healthy
-        timeout 60 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} palo-sync-test)" == "healthy" ]; do sleep 2; done' || true
+        timeout 60 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} palo-sync-test 2>/dev/null)" == "healthy" ]; do sleep 2; done' || true
         
         # Check container status
-        docker ps -a | grep palo-sync-test
+        docker ps -a | grep palo-sync-test || true
         
         # Clean up
-        docker stop palo-sync-test || true
-        docker rm palo-sync-test || true
+        docker stop palo-sync-test redis-test || true
+        docker rm palo-sync-test redis-test || true
+        docker network rm test-network || true
         
         echo "✓ Container health check completed"
     

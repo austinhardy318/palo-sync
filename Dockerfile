@@ -23,6 +23,6 @@ EXPOSE 5000
 
 # Note: Healthcheck is configured in docker-compose.yml
 
-# Run the application
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]
+# Run the application with Gunicorn
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app.main:app"]
 

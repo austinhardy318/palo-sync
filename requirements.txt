@@ -9,4 +9,6 @@ pyrad==2.3
 flask-wtf==1.2.1
 flask-limiter==3.5.0
 bcrypt==4.1.2
+gunicorn==21.2.0
+redis==5.0.1
 
