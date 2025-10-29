@@ -54,18 +54,7 @@ jobs:
     - name: Check for common issues
       run: |
         echo "Checking for security issues..."
-        docker run --rm palo-sync:latest python -c "
-          import sys
-          # Check Python version
-          assert sys.version_info >= (3, 8), 'Python version too old'
-          print(f'✓ Python {sys.version}')
-          
-          # Check required modules
-          required = ['flask', 'requests', 'xml.etree.ElementTree']
-          for module in required:
-              __import__(module)
-          print('✓ All required modules available')
-        "
+        docker run --rm palo-sync:latest python -c "import sys; assert sys.version_info >= (3, 8), 'Python version too old'; print(f'✓ Python {sys.version}'); required = ['flask', 'requests', 'xml.etree.ElementTree']; [__import__(module) for module in required]; print('✓ All required modules available')"
     
     - name: Validate Dockerfile
       run: |
