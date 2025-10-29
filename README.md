@@ -32,7 +32,43 @@ A Dockerized Flask web application for synchronizing Palo Alto Panorama configur
 
 ### Installation
 
-1. **Clone or download this repository**
+There are two ways to run Palo-Sync:
+
+#### Option 1: Using Pre-built Image (Recommended)
+
+1. **Clone this repository for configuration files**
+   ```bash
+   git clone https://github.com/austinhardy318/palo-sync.git
+   cd palo-sync
+   ```
+
+2. **Copy and edit the environment file**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials (see Option 2, step 3 for details)
+   ```
+
+3. **Start the container**
+   
+   The `docker-compose.yml` file is pre-configured to use the pre-built image:
+   ```bash
+   docker-compose up -d
+   ```
+   
+   Or if you want to build from source locally:
+   ```bash
+   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+   ```
+
+4. **Access the application at http://localhost:5001**
+
+#### Option 2: Building from Source
+
+1. **Clone this repository**
+   ```bash
+   git clone https://github.com/austinhardy318/palo-sync.git
+   cd palo-sync
+   ```
 
 2. **Copy the environment file template**
    ```bash
@@ -72,9 +108,9 @@ A Dockerized Flask web application for synchronizing Palo Alto Panorama configur
    ./manage.sh start
    ```
    
-   Or using docker-compose directly:
+   Or using docker-compose with build file:
    ```bash
-   docker-compose up -d
+   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
    ```
 
 5. **Access the application**
@@ -308,7 +344,8 @@ docker-compose up -d
 ├── documentation/            # Development documentation
 │   └── api-guide/            # Palo Alto API reference
 ├── Dockerfile                # Docker image definition
-├── docker-compose.yml        # Docker Compose configuration
+├── docker-compose.yml        # Docker Compose configuration (uses pre-built image)
+├── docker-compose.build.yml  # Docker Compose override for building from source
 ├── requirements.txt          # Python dependencies
 ├── manage.sh                 # Management script
 ├── .env.example              # Environment template
