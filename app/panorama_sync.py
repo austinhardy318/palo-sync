@@ -5,8 +5,10 @@ Handles diff checking, backup creation, and sync operations
 
 import logging
 import io
+import re
+import json
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -23,7 +25,7 @@ if not Config.SSL_VERIFY:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-def get_ssl_verify():
+def get_ssl_verify() -> Union[bool, str]:
     """Get SSL verification setting based on configuration"""
     if not Config.SSL_VERIFY:
         return False
@@ -35,7 +37,6 @@ def sanitize_error_message(error_msg: str) -> str:
     if not error_msg:
         return error_msg
     # Replace password in URLs
-    import re
     error_msg = re.sub(r'password=[^&\s]+', 'password=***', error_msg)
     return error_msg
 
@@ -114,18 +115,31 @@ class PanoramaSync:
         api_key_url = f"https://{host}/api/?type=keygen&user={auth['username']}&password={auth['password']}"
         try:
             response = requests.get(api_key_url, verify=get_ssl_verify(), timeout=30)
-            # Redact password from URL for logging
-            if response.status_code == 200:
+            response.raise_for_status()
+            
+            try:
                 root = ET.fromstring(response.text)
-                if root.attrib.get('status') == 'success':
-                    api_key = root.find('.//key').text
+            except ET.ParseError as e:
+                raise Exception(f"Invalid XML response when getting API key: {e}")
+            
+            if root.attrib.get('status') == 'success':
+                key_elem = root.find('.//key')
+                if key_elem is not None and key_elem.text:
+                    api_key = key_elem.text
                     # Cache the API key in the auth dict for future use
                     auth['api_key'] = api_key
                     return api_key
                 else:
-                    raise Exception("Failed to obtain API key")
+                    raise Exception("API key not found in response")
             else:
-                raise Exception(f"Failed to get API key: HTTP {response.status_code}")
+                error_msg_elem = root.find('.//msg')
+                error_text = error_msg_elem.text if error_msg_elem is not None else 'Unknown error'
+                raise Exception(f"Failed to obtain API key: {error_text}")
+        except requests.RequestException as e:
+            # Sanitize error message to not expose passwords
+            error_msg = sanitize_error_message(str(e))
+            logger.error(f"Request error getting API key: {error_msg}")
+            raise Exception(f"Failed to get API key: {error_msg}")
         except Exception as e:
             # Sanitize error message to not expose passwords
             error_msg = sanitize_error_message(str(e))
@@ -147,6 +161,9 @@ class PanoramaSync:
             response = requests.get(export_url, verify=get_ssl_verify(), timeout=60)
             response.raise_for_status()
             return response.text
+        except requests.RequestException as e:
+            logger.error(f"Request error exporting configuration: {e}")
+            raise Exception(f"Failed to export configuration: {e}")
         except Exception as e:
             logger.error(f"Error exporting configuration: {e}")
             raise
@@ -184,11 +201,16 @@ class PanoramaSync:
             response.raise_for_status()
             
             # Check if import was successful
-            root = ET.fromstring(response.text)
+            try:
+                root = ET.fromstring(response.text)
+            except ET.ParseError as e:
+                raise Exception(f"Invalid XML response during import: {e}")
+            
             logger.info(f"Import response: {response.text}")
             if root.attrib.get('status') != 'success':
-                error_msg = root.find('.//msg').text if root.find('.//msg') is not None else 'Unknown error'
-                raise Exception(f"Import failed: {error_msg}")
+                error_msg = root.find('.//msg')
+                error_text = error_msg.text if error_msg is not None else 'Unknown error'
+                raise Exception(f"Import failed: {error_text}")
             
             # Try to get the config name from the response, or use default 'config'
             config_name = root.find('.//result').text if root.find('.//result') is not None else 'config.xml'
@@ -207,7 +229,11 @@ class PanoramaSync:
             load_response = requests.post(api_url, data=load_params, verify=get_ssl_verify(), timeout=120)
             load_response.raise_for_status()
             
-            load_root = ET.fromstring(load_response.text)
+            try:
+                load_root = ET.fromstring(load_response.text)
+            except ET.ParseError as e:
+                raise Exception(f"Invalid XML response during load: {e}")
+            
             logger.info(f"Load response status: {load_root.attrib.get('status')}, response: {load_response.text}")
             if load_root.attrib.get('status') != 'success':
                 error_msg = load_root.find('.//msg')
@@ -244,14 +270,20 @@ class PanoramaSync:
                 commit_response = requests.post(api_url, data=commit_params, verify=get_ssl_verify(), timeout=120)
                 commit_response.raise_for_status()
                 
-                commit_root = ET.fromstring(commit_response.text)
+                try:
+                    commit_root = ET.fromstring(commit_response.text)
+                except ET.ParseError as e:
+                    raise Exception(f"Invalid XML response during commit: {e}")
+                
                 if commit_root.attrib.get('status') == 'success':
-                    job_id = commit_root.find('.//job').text if commit_root.find('.//job') is not None else 'unknown'
+                    job_elem = commit_root.find('.//job')
+                    job_id = job_elem.text if job_elem is not None and job_elem.text else 'unknown'
                     logger.info(f"Commit initiated with job ID: {job_id}")
                     return job_id
                 else:
-                    error_msg = commit_root.find('.//msg').text if commit_root.find('.//msg') is not None else 'Unknown error'
-                    raise Exception(f"Commit failed: {error_msg}")
+                    error_msg = commit_root.find('.//msg')
+                    error_text = error_msg.text if error_msg is not None else 'Unknown error'
+                    raise Exception(f"Commit failed: {error_text}")
             else:
                 logger.info("Configuration loaded to candidate only (not committed)")
                 return 'candidate-only'
@@ -279,11 +311,19 @@ class PanoramaSync:
             response = requests.post(api_url, data=params, verify=get_ssl_verify(), timeout=30)
             response.raise_for_status()
             
-            root = ET.fromstring(response.text)
+            try:
+                root = ET.fromstring(response.text)
+            except ET.ParseError as e:
+                logger.warning(f"Invalid XML response when getting hostname: {e}")
+                return None
+            
             if root.attrib.get('status') == 'success':
                 hostname_elem = root.find('.//hostname')
                 if hostname_elem is not None and hostname_elem.text:
                     return hostname_elem.text
+            return None
+        except requests.RequestException as e:
+            logger.warning(f"Request error getting hostname: {e}")
             return None
         except Exception as e:
             logger.warning(f"Failed to get current hostname: {e}")
@@ -421,7 +461,6 @@ class PanoramaSync:
             # Add try/except for JSON serialization
             try:
                 # Get JSON and parse it to pretty-print with indentation
-                import json
                 diff_json_str = diff.to_json()
                 diff_parsed = json.loads(diff_json_str)
                 result['diff_json'] = json.dumps(diff_parsed, indent=2)

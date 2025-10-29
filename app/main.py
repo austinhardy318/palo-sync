@@ -9,8 +9,9 @@ import logging
 import datetime as dt
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, render_template, jsonify, request, Response, redirect, url_for, session, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session, flash
 from functools import wraps
+from typing import Optional, Dict, Any, Callable, Tuple
 
 from .config import Config
 from .panorama_sync import PanoramaSync
@@ -29,7 +30,7 @@ app.secret_key = FLASK_SECRET_KEY
 app.permanent_session_lifetime = dt.timedelta(hours=8)
 
 # Enable CSRF protection
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_wtf.csrf import CSRFProtect
 csrf = CSRFProtect(app)
 
 # Note: CSRF is enabled globally but exempted on specific routes
@@ -74,7 +75,7 @@ authenticator = Authenticator()
 operation_logs = []
 
 
-def requires_auth(f):
+def requires_auth(f: Callable) -> Callable:
     """Decorator for routes that require authentication"""
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -92,10 +93,37 @@ def requires_auth(f):
     return decorated
 
 
-def log_operation(operation: str, details: dict = None):
+def validate_backup_path(backup_path: str, backup_dir: Path) -> Tuple[bool, Optional[str]]:
+    """
+    Validate backup path to prevent directory traversal attacks
+    Returns (is_valid, error_message)
+    """
+    if not backup_path or not isinstance(backup_path, str):
+        return False, 'backup_path is required and must be a string'
+    
+    # Check for path traversal attempts
+    if '..' in backup_path or backup_path.startswith('.'):
+        return False, 'Invalid backup path'
+    
+    # Ensure path is within backup directory
+    try:
+        backup_file = Path(backup_path)
+        backups_dir = Path(backup_dir)
+        # Normalize the path and check it's within the backup directory
+        resolved_path = backup_file.resolve()
+        if not str(resolved_path).startswith(str(backups_dir.resolve())):
+            return False, 'Invalid backup path'
+        return True, None
+    except (ValueError, OSError):
+        return False, 'Invalid backup path'
+
+
+def log_operation(operation: str, details: Optional[Dict[str, Any]] = None) -> None:
     """Add entry to operation logs"""
+    # Safely handle None details
+    user_log: Dict[str, Any] = details.copy() if details else {}
+    
     # Add username from session if available
-    user_log = details.copy() if details else {}
     if 'user' in session:
         user_log['user'] = session.get('username', 'unknown')
     
@@ -114,7 +142,7 @@ def log_operation(operation: str, details: dict = None):
 @app.route('/login', methods=['GET', 'POST'])
 @csrf.exempt  # Exempt login from CSRF protection since it's the entry point
 @limiter.limit("5 per minute")
-def login():
+def login() -> Any:
     """Login page with rate limiting"""
     if request.method == 'POST':
         username = request.form.get('username')
@@ -139,7 +167,7 @@ def login():
 
 
 @app.route('/logout')
-def logout():
+def logout() -> Any:
     """Logout and clear session"""
     username = session.get('username')
     session.clear()
@@ -150,20 +178,20 @@ def logout():
 
 @app.route('/')
 @requires_auth
-def index():
+def index() -> str:
     """Serve the main web GUI"""
     return render_template('index.html')
 
 
 @app.route('/settings')
 @requires_auth
-def settings():
+def settings() -> str:
     """Serve the settings page"""
     return render_template('settings.html')
 
 
 @app.route('/api/status', methods=['GET'])
-def get_status():
+def get_status() -> Any:
     """Get connection status for both Panorama instances"""
     try:
         status = sync_manager.test_connection()
@@ -273,24 +301,11 @@ def restore_backup():
             return jsonify({'success': False, 'error': 'Request body is required'}), 400
         
         backup_path = data.get('backup_path')
-        if not backup_path or not isinstance(backup_path, str):
-            return jsonify({'success': False, 'error': 'backup_path is required and must be a string'}), 400
         
-        # Validate backup_path - allow full paths within backups directory
-        # Check for path traversal attempts
-        if '..' in backup_path or backup_path.startswith('.'):
-            return jsonify({'success': False, 'error': 'Invalid backup path'}), 400
-        
-        # Ensure path is within backup directory
-        try:
-            backup_file = Path(backup_path)
-            backups_dir = Path(sync_manager.backup_dir)
-            # Normalize the path and check it's within the backup directory
-            resolved_path = backup_file.resolve()
-            if not str(resolved_path).startswith(str(backups_dir.resolve())):
-                return jsonify({'success': False, 'error': 'Invalid backup path'}), 400
-        except (ValueError, OSError):
-            return jsonify({'success': False, 'error': 'Invalid backup path'}), 400
+        # Validate backup path
+        is_valid, error_msg = validate_backup_path(backup_path, sync_manager.backup_dir)
+        if not is_valid:
+            return jsonify({'success': False, 'error': error_msg}), 400
         
         commit = data.get('commit', False)
         if not isinstance(commit, bool):
@@ -317,24 +332,11 @@ def delete_backup():
             return jsonify({'success': False, 'error': 'Request body is required'}), 400
         
         backup_path = data.get('backup_path')
-        if not backup_path or not isinstance(backup_path, str):
-            return jsonify({'success': False, 'error': 'backup_path is required and must be a string'}), 400
         
-        # Validate backup_path - allow full paths within backups directory
-        # Check for path traversal attempts
-        if '..' in backup_path or backup_path.startswith('.'):
-            return jsonify({'success': False, 'error': 'Invalid backup path'}), 400
-        
-        # Ensure path is within backup directory
-        try:
-            backup_file = Path(backup_path)
-            backups_dir = Path(sync_manager.backup_dir)
-            # Normalize the path and check it's within the backup directory
-            resolved_path = backup_file.resolve()
-            if not str(resolved_path).startswith(str(backups_dir.resolve())):
-                return jsonify({'success': False, 'error': 'Invalid backup path'}), 400
-        except (ValueError, OSError):
-            return jsonify({'success': False, 'error': 'Invalid backup path'}), 400
+        # Validate backup path
+        is_valid, error_msg = validate_backup_path(backup_path, sync_manager.backup_dir)
+        if not is_valid:
+            return jsonify({'success': False, 'error': error_msg}), 400
         
         log_operation('backup_delete_start', {'backup_path': backup_path})
         delete_result = sync_manager.delete_backup(backup_path)

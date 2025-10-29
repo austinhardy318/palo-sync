@@ -173,14 +173,9 @@ Use the pre-built Docker image from GitHub Container Registry (GHCR).
 
 4. **Build and start the container**
    
-   Using the management script (recommended):
+   Using the docker-compose.build.yml:
    ```bash
-   ./manage.sh start
-   ```
-   
-   Or using docker-compose directly:
-   ```bash
-   docker-compose up -d
+   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
    ```
 
 5. **Access the application**
