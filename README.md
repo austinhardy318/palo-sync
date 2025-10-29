@@ -36,31 +36,100 @@ There are two ways to run Palo-Sync:
 
 #### Option 1: Using Pre-built Image (Recommended)
 
-1. **Clone this repository for configuration files**
-   ```bash
-   git clone https://github.com/austinhardy318/palo-sync.git
-   cd palo-sync
-   ```
+Use the pre-built Docker image from GitHub Container Registry (GHCR).
 
-2. **Copy and edit the environment file**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials (see Option 2, step 3 for details)
-   ```
 
-3. **Start the container**
+
+1. **Save the the docker-compose.yml file from this repo.**
    
-   The `docker-compose.yml` file is pre-configured to use the pre-built image:
-   ```bash
-   docker-compose up -d
-   ```
+   Create a file named `docker-compose.yml` with the following content:
+   ```yaml
+   services:
+     palo-sync:
+       image: ghcr.io/austinhardy318/palo-sync:latest
+       container_name: palo-sync
+       ports:
+         - "5001:5000"
+       volumes:
+         - ./backups:/backups
+         - ./logs:/app/logs
+         - ./settings:/app/settings
+       environment:
+         # Production Panorama Configuration
+         - PROD_PANORAMA_HOST=${PROD_PANORAMA_HOST}
+         - PROD_PANORAMA_USERNAME=${PROD_PANORAMA_USERNAME}
+         - PROD_PANORAMA_PASSWORD=${PROD_PANORAMA_PASSWORD}
+         - PROD_PANORAMA_API_KEY=${PROD_PANORAMA_API_KEY}
+         
+         # Lab Panorama Configuration
+         - LAB_PANORAMA_HOST=${LAB_PANORAMA_HOST}
+         - LAB_PANORAMA_HOSTNAME=${LAB_PANORAMA_HOSTNAME}
+         - LAB_PANORAMA_USERNAME=${LAB_PANORAMA_USERNAME}
+         - LAB_PANORAMA_PASSWORD=${LAB_PANORAMA_PASSWORD}
+         - LAB_PANORAMA_API_KEY=${LAB_PANORAMA_API_KEY}
+         
+         # Flask Configuration
+         - FLASK_ENV=production
+         - FLASK_APP=app.main:app
+         - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+         - SSL_VERIFY=${SSL_VERIFY:-false}
+         
+         # GUI Authentication (optional)
+         - GUI_USERNAME=${GUI_USERNAME}
+         - GUI_PASSWORD=${GUI_PASSWORD}
+         
+         # RADIUS Authentication (optional)
+         - RADIUS_ENABLED=${RADIUS_ENABLED:-false}
+         - RADIUS_SERVER=${RADIUS_SERVER}
+         - RADIUS_PORT=${RADIUS_PORT:-1812}
+         - RADIUS_SECRET=${RADIUS_SECRET}
+         - RADIUS_TIMEOUT=${RADIUS_TIMEOUT:-5}
+         
+         # Timezone (optional, defaults to UTC)
+         - TZ=${TZ:-UTC}
+       restart: unless-stopped
+       healthcheck:
+         test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/config')"]
+         interval: 60s
+         timeout: 10s
+         retries: 3
+         start_period: 40s
    
-   Or if you want to build from source locally:
-   ```bash
-   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+   volumes:
+     backups:
+     logs:
    ```
 
-4. **Access the application at http://localhost:5001**
+2. **Create the environment file for testing. Set in OS for production.**
+   
+   Create a file named `.env` with your Panorama credentials (see Option 2, step 3 for detailed configuration):
+   ```env
+   # Production Panorama Configuration
+   PROD_PANORAMA_HOST=prod-panorama.example.com
+   PROD_PANORAMA_USERNAME=admin
+   PROD_PANORAMA_PASSWORD=your_password_here
+   
+   # Lab Panorama Configuration
+   LAB_PANORAMA_HOST=lab-panorama.example.com
+   LAB_PANORAMA_USERNAME=admin
+   LAB_PANORAMA_PASSWORD=your_password_here
+   
+   # Flask Configuration
+   FLASK_SECRET_KEY=your-secret-key-here
+   
+   # Web GUI Authentication (optional)
+   GUI_USERNAME=admin
+   GUI_PASSWORD=changeme
+   ```
+   
+   **Note**: Generate a secure `FLASK_SECRET_KEY` with: `python -c "import secrets; print(secrets.token_hex(32))"`
+
+4. **Pull and start the container**
+   ```bash
+   docker compose up -d
+   ```
+
+5. **Access the application at http://localhost:5001**
 
 #### Option 2: Building from Source
 
@@ -72,7 +141,7 @@ There are two ways to run Palo-Sync:
 
 2. **Copy the environment file template**
    ```bash
-   cp .env.example .env
+   cp env.example .env
    ```
 
 3. **Edit `.env` file with your Panorama credentials**
@@ -108,9 +177,9 @@ There are two ways to run Palo-Sync:
    ./manage.sh start
    ```
    
-   Or using docker-compose with build file:
+   Or using docker-compose directly:
    ```bash
-   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+   docker-compose up -d
    ```
 
 5. **Access the application**
@@ -348,7 +417,7 @@ docker-compose up -d
 ├── docker-compose.build.yml  # Docker Compose override for building from source
 ├── requirements.txt          # Python dependencies
 ├── manage.sh                 # Management script
-├── .env.example              # Environment template
+├── env.example               # Environment template
 ├── .env                      # Environment file (not in git)
 └── README.md                 # This file
 ```

@@ -1,6 +1,6 @@
 services:
   palo-sync:
-    build: .
+    image: ghcr.io/austinhardy318/palo-sync:latest
     container_name: palo-sync
     ports:
       - "5001:5000"

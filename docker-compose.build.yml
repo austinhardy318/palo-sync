@@ -1,0 +1,8 @@
+# Docker Compose file for building from source
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d
+
+services:
+  palo-sync:
+    build: .
+    # Override the image directive from docker-compose.yml to enable local builds
+
