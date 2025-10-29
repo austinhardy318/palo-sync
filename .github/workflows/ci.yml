@@ -33,7 +33,13 @@ jobs:
     - name: Test imports
       run: |
         docker run --rm -e FLASK_SECRET_KEY=test_secret_key_for_ci \
-          palo-sync:latest python -c "import flask; import app.main; print('✓ Imports successful')"
+          palo-sync:latest python -c "
+          import flask
+          import app.config
+          import app.auth
+          import app.panorama_sync
+          print('✓ All modules imported successfully')
+        "
     
     - name: Test configuration module
       run: |
@@ -45,6 +51,20 @@ jobs:
           -e LAB_PANORAMA_PASSWORD=test \
           -e FLASK_SECRET_KEY=test_secret_key \
           palo-sync:latest python -c "from app.config import Config; print('✓ Config module loads successfully')"
+    
+    - name: Test main module with credentials
+      run: |
+        docker run --rm -e PROD_PANORAMA_HOST=test \
+          -e PROD_PANORAMA_USERNAME=test \
+          -e PROD_PANORAMA_PASSWORD=test \
+          -e LAB_PANORAMA_HOST=test \
+          -e LAB_PANORAMA_USERNAME=test \
+          -e LAB_PANORAMA_PASSWORD=test \
+          -e FLASK_SECRET_KEY=test_secret_key \
+          palo-sync:latest python -c "
+          import app.main
+          print('✓ Main module loads successfully with test credentials')
+        "
     
     - name: Check for common issues
       run: |
