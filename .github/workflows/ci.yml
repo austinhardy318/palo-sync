@@ -32,7 +32,8 @@ jobs:
     
     - name: Test imports
       run: |
-        docker run --rm palo-sync:latest python -c "import flask; import app.main; print('✓ Imports successful')"
+        docker run --rm -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+          palo-sync:latest python -c "import flask; import app.main; print('✓ Imports successful')"
     
     - name: Test configuration module
       run: |
