@@ -33,7 +33,7 @@ settings/*
 !settings/.gitkeep
 
 # Documentation (internal development docs)
-documentation/
+dev-docs/
 
 # OS
 .DS_Store
