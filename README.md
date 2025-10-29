@@ -1,6 +1,7 @@
 # Palo-Sync
 
 [![CI/CD Pipeline](https://github.com/austinhardy318/palo-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/austinhardy318/palo-sync/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 A Dockerized Flask web application for synchronizing Palo Alto Panorama configurations from production to lab environments. Features automatic backups, configuration diff checking, and a user-friendly web interface.
 
