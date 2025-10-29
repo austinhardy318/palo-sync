@@ -1,0 +1,64 @@
+# Git
+.git/
+.gitignore
+
+# Environment files (handled by docker-compose)
+.env
+.env.example
+*.env
+
+# Documentation (not needed in container)
+documentation/
+*.md
+!README.md
+
+# IDE files
+.vscode/
+.idea/
+.history/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Docker files
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Runtime data (mounted as volumes)
+backups/
+logs/
+settings/
+
+# Management scripts
+manage.sh
+*.sh
+
+# Test files
+test/
+tests/
+*.test.py
+*_test.py
+
+# Temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+

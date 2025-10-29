@@ -1,0 +1,55 @@
+services:
+  palo-sync:
+    build: .
+    container_name: palo-sync
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./backups:/backups
+      - ./logs:/app/logs
+      - ./settings:/app/settings
+    environment:
+      # Production Panorama Configuration
+      - PROD_PANORAMA_HOST=${PROD_PANORAMA_HOST}
+      - PROD_PANORAMA_USERNAME=${PROD_PANORAMA_USERNAME}
+      - PROD_PANORAMA_PASSWORD=${PROD_PANORAMA_PASSWORD}
+      - PROD_PANORAMA_API_KEY=${PROD_PANORAMA_API_KEY}
+      
+      # Lab Panorama Configuration
+      - LAB_PANORAMA_HOST=${LAB_PANORAMA_HOST}
+      - LAB_PANORAMA_HOSTNAME=${LAB_PANORAMA_HOSTNAME}
+      - LAB_PANORAMA_USERNAME=${LAB_PANORAMA_USERNAME}
+      - LAB_PANORAMA_PASSWORD=${LAB_PANORAMA_PASSWORD}
+      - LAB_PANORAMA_API_KEY=${LAB_PANORAMA_API_KEY}
+      
+      # Flask Configuration
+      - FLASK_ENV=production
+      - FLASK_APP=app.main:app
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      - SSL_VERIFY=${SSL_VERIFY:-false}
+      
+      # GUI Authentication (optional)
+      - GUI_USERNAME=${GUI_USERNAME}
+      - GUI_PASSWORD=${GUI_PASSWORD}
+      
+      # RADIUS Authentication (optional)
+      - RADIUS_ENABLED=${RADIUS_ENABLED:-false}
+      - RADIUS_SERVER=${RADIUS_SERVER}
+      - RADIUS_PORT=${RADIUS_PORT:-1812}
+      - RADIUS_SECRET=${RADIUS_SECRET}
+      - RADIUS_TIMEOUT=${RADIUS_TIMEOUT:-5}
+      
+      # Timezone (optional, defaults to UTC)
+      - TZ=${TZ:-UTC}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/config')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  backups:
+  logs:
+

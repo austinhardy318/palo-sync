@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Palo-Sync</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">🔀 Palo-Sync</div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/settings" class="nav-link nav-active">Settings</a>
+                <a href="/logout" class="nav-link">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <header>
+            <h1>Settings</h1>
+            <p>Configure default behavior for the Palo-Sync application</p>
+        </header>
+
+        <!-- Settings Section -->
+        <section id="settings-section" class="card">
+            <h2>Default Sync Behavior</h2>
+            <p>These settings control the default behavior when synchronizing configurations. You can override these settings on the home page for individual sync operations.</p>
+            
+            <div class="checkbox-container" style="margin: 15px 0;">
+                <label>
+                    <input type="checkbox" id="settings-backup" checked>
+                    <strong>Create backup before sync</strong>
+                    <p style="margin-left: 24px; color: #666; font-size: 0.9em;">Automatically create a backup of the lab configuration before applying changes from production. Recommended for safety.</p>
+                </label>
+            </div>
+            
+            <div class="checkbox-container" style="margin: 15px 0;">
+                <label>
+                    <input type="checkbox" id="settings-commit">
+                    <strong>Commit configuration to running config</strong>
+                    <p style="margin-left: 24px; color: #666; font-size: 0.9em;">Commit changes to the running configuration. If unchecked, changes will only be in the candidate configuration.</p>
+                </label>
+            </div>
+            
+            <div class="checkbox-container" style="margin: 15px 0;">
+                <label>
+                    <input type="checkbox" id="settings-preserve-hostname" checked>
+                    <strong>Preserve lab hostname during sync</strong>
+                    <p style="margin-left: 24px; color: #666; font-size: 0.9em;">Keep the lab Panorama's hostname unchanged when importing the production configuration.</p>
+                </label>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <button id="save-settings" class="btn btn-primary">Save Settings</button>
+                <span id="settings-saved" class="settings-saved" style="display: none; margin-left: 10px; color: green;">✓ Settings saved successfully</span>
+            </div>
+        </section>
+
+        <!-- Backup Cleanup Section -->
+        <section id="cleanup-section" class="card">
+            <h2>Backup Management</h2>
+            <p>Delete all backup files to free up disk space. This action cannot be undone.</p>
+            <button id="cleanup-backups" class="btn btn-danger">Delete All Backups</button>
+            <div id="cleanup-result" style="margin-top: 15px;"></div>
+        </section>
+
+        <!-- Configuration Information -->
+        <section id="config-section" class="card">
+            <h2>Connection Information</h2>
+            <p>View the current configuration for production and lab Panorama instances.</p>
+            <button id="load-config" class="btn btn-secondary">Load Configuration</button>
+            <div id="config-display" style="margin-top: 15px;">
+                <p class="loading">Click "Load Configuration" to view connection details</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='settings.js') }}"></script>
+</body>
+</html>
+

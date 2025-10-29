@@ -1,0 +1,40 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+.history/
+*.swp
+*.swo
+*~
+
+# Docker
+*.log
+
+# Backups and logs
+backups/*
+!backups/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Settings
+settings/*
+!settings/.gitkeep
+
+# Documentation (internal development docs)
+documentation/
+
+# OS
+.DS_Store
+Thumbs.db

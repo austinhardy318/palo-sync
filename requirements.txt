@@ -1,0 +1,12 @@
+pan-os-python==1.12.3
+Flask==3.0.0
+python-dotenv==1.0.0
+deepdiff==6.7.1
+xmltodict==0.13.0
+requests==2.31.0
+lxml==4.9.3
+pyrad==2.3
+flask-wtf==1.2.1
+flask-limiter==3.5.0
+bcrypt==4.1.2
+

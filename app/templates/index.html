@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palo-Sync</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">🔀 Palo-Sync</div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/settings" class="nav-link">Settings</a>
+                <a href="/logout" class="nav-link">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <header>
+            <h1>Panorama Configuration Sync</h1>
+            <p>Synchronize production Palo Alto Panorama configuration to lab environment</p>
+        </header>
+
+        <!-- Status Section -->
+        <section id="status-section" class="card">
+            <h2>Connection Status</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <h3>Production Panorama</h3>
+                    <div id="prod-status" class="status-badge">Checking...</div>
+                    <div id="prod-details" class="status-details"></div>
+                </div>
+                <div class="status-item">
+                    <h3>Lab Panorama</h3>
+                    <div id="lab-status" class="status-badge">Checking...</div>
+                    <div id="lab-details" class="status-details"></div>
+                </div>
+            </div>
+            <button id="refresh-status" class="btn btn-secondary">Refresh Status</button>
+        </section>
+
+        <!-- Diff Section -->
+        <section id="diff-section" class="card">
+            <h2>Configuration Diff</h2>
+            <p>Compare production and lab configurations to see what will change</p>
+            <button id="run-diff" class="btn btn-primary">Run Diff Check</button>
+            <div id="diff-results" class="diff-results"></div>
+        </section>
+
+        <!-- Sync Section -->
+        <section id="sync-section" class="card">
+            <h2>Synchronize Configuration</h2>
+            <p><strong>Warning:</strong> This will overwrite the lab configuration with production settings.</p>
+            <div class="checkbox-container">
+                <label>
+                    <input type="checkbox" id="create-backup">
+                    Create backup before sync (recommended)
+                </label>
+            </div>
+            <div class="checkbox-container">
+                <label>
+                    <input type="checkbox" id="commit-config">
+                    Commit configuration to running config (default: candidate only)
+                </label>
+            </div>
+            <button id="run-sync" class="btn btn-danger">Execute Sync</button>
+            <div id="sync-results" class="sync-results"></div>
+        </section>
+
+        <!-- Backups Section -->
+        <section id="backups-section" class="card">
+            <h2>Backup Management</h2>
+            <button id="refresh-backups" class="btn btn-secondary">Refresh List</button>
+            <table id="backups-table" class="backups-table">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Size</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="4" class="loading">Loading backups...</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Activity Log Section -->
+        <section id="logs-section" class="card">
+            <h2>Activity Log</h2>
+            <button id="refresh-logs" class="btn btn-secondary">Refresh Logs</button>
+            <div id="logs" class="logs"></div>
+        </section>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Confirm Action</h3>
+            <p id="modal-message"></p>
+            <div class="modal-buttons">
+                <button id="confirm-yes" class="btn btn-danger">Confirm</button>
+                <button id="confirm-no" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+
