@@ -7,6 +7,8 @@ NMS-Sync is a Dockerized web application for synchronizing network management sy
 
 > **Disclaimer**: "Panorama" and "Palo Alto Networks" are trademarks of Palo Alto Networks, Inc. This project is not affiliated with, endorsed by, or sponsored by Palo Alto Networks. NMS-Sync is an independent, open-source project.
 
+![NMS-Sync Web Interface](docs/images/web-gui.png)
+
 ## What It Does
 
 NMS-Sync provides a safe and automated way to:
