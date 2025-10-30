@@ -15,6 +15,29 @@ function hideModal() {
     confirmCallback = null;
 }
 
+// Close-only modal helper (no cancel)
+function showCloseModal(title, message, onClose) {
+    const modal = document.getElementById('confirm-modal');
+    const confirmBtn = document.getElementById('confirm-yes');
+    const cancelBtn = document.getElementById('confirm-no');
+    const originalText = confirmBtn.textContent;
+    const originalCancelDisplay = cancelBtn.style.display;
+
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-message').textContent = message;
+
+    confirmBtn.textContent = 'Close';
+    cancelBtn.style.display = 'none';
+    confirmCallback = () => {
+        try { if (typeof onClose === 'function') onClose(); } finally {
+            hideModal();
+            confirmBtn.textContent = originalText || 'Confirm';
+            cancelBtn.style.display = originalCancelDisplay || '';
+        }
+    };
+    modal.classList.add('show');
+}
+
 // Get CSRF token from cookie (Flask-WTF sets it in a cookie)
 function getCsrfToken() {
     // Try to get from cookie first
@@ -56,14 +79,32 @@ function fetchWithCsrf(url, options = {}) {
 // Settings management - Using server-side file storage
 async function saveSettings() {
     const logRefreshInterval = parseInt(document.getElementById('settings-log-refresh-interval').value) || 10;
+    const requestTimeout = parseInt(document.getElementById('settings-request-timeout').value) || 30;
+    const timezone = (document.getElementById('settings-timezone').value || 'UTC').trim();
     const validatedInterval = Math.max(5, Math.min(300, logRefreshInterval)); // Clamp between 5 and 300
+    const validatedTimeout = Math.max(5, Math.min(300, requestTimeout)); // Clamp between 5 and 300
+    const diffIgnorePaths = (document.getElementById('diff-ignore-paths')?.value || '')
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+    const diffIgnoreRegexPaths = (document.getElementById('diff-ignore-regex')?.value || '')
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+    const diffSignificantDigitsStr = document.getElementById('diff-significant-digits')?.value ?? '';
+    const diffSignificantDigits = diffSignificantDigitsStr === '' ? null : Number(diffSignificantDigitsStr);
     
     const settings = {
         createBackup: document.getElementById('settings-backup').checked,
         commitConfig: document.getElementById('settings-commit').checked,
         preserveHostname: document.getElementById('settings-preserve-hostname').checked,
         autoRefreshLogs: document.getElementById('settings-auto-refresh-logs').checked,
-        logRefreshInterval: validatedInterval
+        logRefreshInterval: validatedInterval,
+        requestTimeout: validatedTimeout,
+        timezone: timezone,
+        diffIgnorePaths,
+        diffIgnoreRegexPaths,
+        diffSignificantDigits
     };
     
     try {
@@ -83,17 +124,15 @@ async function saveSettings() {
                 savedIndicator.style.display = 'none';
             }, 3000);
         } else {
-            showModal(
+            showCloseModal(
                 'Error Saving Settings',
-                `Failed to save settings: ${data.error}`,
-                () => hideModal()
+                `Failed to save settings: ${data.error}`
             );
         }
     } catch (error) {
-        showModal(
+        showCloseModal(
             'Error',
-            `Error saving settings: ${error.message}`,
-            () => hideModal()
+            `Error saving settings: ${error.message}`
         );
     }
 }
@@ -116,6 +155,26 @@ async function loadSettings() {
         }
         if (intervalEl) {
             intervalEl.value = settings.logRefreshInterval ?? 10;
+        }
+        const timeoutEl = document.getElementById('settings-request-timeout');
+        if (timeoutEl) {
+            timeoutEl.value = settings.requestTimeout ?? 30;
+        }
+        const tzEl = document.getElementById('settings-timezone');
+        if (tzEl) {
+            tzEl.value = settings.timezone || 'UTC';
+        }
+        const ignorePathsEl = document.getElementById('diff-ignore-paths');
+        if (ignorePathsEl) {
+            ignorePathsEl.value = Array.isArray(settings.diffIgnorePaths) ? settings.diffIgnorePaths.join('\n') : '';
+        }
+        const ignoreRegexEl = document.getElementById('diff-ignore-regex');
+        if (ignoreRegexEl) {
+            ignoreRegexEl.value = Array.isArray(settings.diffIgnoreRegexPaths) ? settings.diffIgnoreRegexPaths.join('\n') : '';
+        }
+        const sigDigitsEl = document.getElementById('diff-significant-digits');
+        if (sigDigitsEl) {
+            sigDigitsEl.value = settings.diffSignificantDigits ?? '';
         }
     } catch (e) {
         console.error('Error loading settings:', e);
@@ -141,7 +200,7 @@ async function loadConfiguration() {
         // Production block
         const prodBlock = document.createElement('div');
         prodBlock.className = 'config-block';
-        const prodH3 = createSafeElement('h3', {}, 'Production Panorama');
+        const prodH3 = createSafeElement('h3', {}, 'Production NMS');
         prodBlock.appendChild(prodH3);
         prodBlock.appendChild(createSafeElement('p', {}, `Host: ${config.production.host}`));
         prodBlock.appendChild(createSafeElement('p', {}, `Username: ${config.production.username || 'N/A'}`));
@@ -151,7 +210,7 @@ async function loadConfiguration() {
         // Lab block
         const labBlock = document.createElement('div');
         labBlock.className = 'config-block';
-        const labH3 = createSafeElement('h3', {}, 'Lab Panorama');
+        const labH3 = createSafeElement('h3', {}, 'Lab NMS');
         labBlock.appendChild(labH3);
         labBlock.appendChild(createSafeElement('p', {}, `Host: ${config.lab.host}`));
         labBlock.appendChild(createSafeElement('p', {}, `Username: ${config.lab.username || 'N/A'}`));
@@ -270,6 +329,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('save-settings').addEventListener('click', saveSettings);
     document.getElementById('load-config').addEventListener('click', loadConfiguration);
     document.getElementById('cleanup-backups').addEventListener('click', confirmCleanup);
+    document.getElementById('download-settings').addEventListener('click', downloadSettings);
+    document.getElementById('restore-settings-file').addEventListener('change', restoreSettings);
     
     // Modal handlers
     document.getElementById('confirm-yes').addEventListener('click', () => {
@@ -280,3 +341,121 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('confirm-no').addEventListener('click', hideModal);
 });
+
+// Download settings file
+async function downloadSettings() {
+    try {
+        const response = await fetch('/api/settings/download', {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            showCloseModal('Error', error.error?.message || error.message || 'Failed to download settings');
+            return;
+        }
+        
+        // Get filename from Content-Disposition header or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'user_settings.json';
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (filenameMatch && filenameMatch[1]) {
+                filename = filenameMatch[1].replace(/['"]/g, '');
+            }
+        }
+        
+        // Create a blob and download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showCloseModal('Success', 'Settings downloaded successfully');
+    } catch (e) {
+        console.error('Error downloading settings:', e);
+        showCloseModal('Error', 'Failed to download settings: ' + e.message);
+    }
+}
+
+// Restore settings from uploaded file
+async function restoreSettings(event) {
+    const file = event.target.files[0];
+    
+    if (!file) {
+        return;
+    }
+    
+    // Reset the file input for potential re-use
+    event.target.value = '';
+    
+    // Validate file type
+    if (!file.name.endsWith('.json')) {
+        showCloseModal('Error', 'Please select a JSON file');
+        return;
+    }
+    
+    // Confirm restore
+    showModal('Restore Settings', 
+        `Are you sure you want to restore settings from "${file.name}"? This will overwrite your current settings.`,
+        async () => {
+            try {
+                const statusEl = document.getElementById('settings-restore-status');
+                statusEl.textContent = 'Restoring...';
+                statusEl.style.display = 'inline';
+                statusEl.style.color = 'blue';
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Get CSRF token for FormData upload (don't set Content-Type - browser will set it with boundary)
+                const token = getCsrfToken();
+                const headers = {};
+                if (token) {
+                    headers['X-CSRFToken'] = token;
+                }
+                
+                const response = await fetch('/api/settings/restore', {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData,
+                    credentials: 'same-origin'
+                    // Don't set Content-Type - browser will set it automatically for FormData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    statusEl.style.display = 'none';
+                    showCloseModal('Error', data.error?.message || data.message || 'Failed to restore settings');
+                    return;
+                }
+                
+                statusEl.textContent = '✓ Settings restored successfully';
+                statusEl.style.color = 'green';
+                statusEl.style.display = 'inline';
+                
+                // Reload settings to update the form
+                await loadSettings();
+                
+                // Hide status message after 3 seconds
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
+                
+                showCloseModal('Success', 'Settings restored successfully. The form has been updated with the restored values.');
+            } catch (e) {
+                console.error('Error restoring settings:', e);
+                const statusEl = document.getElementById('settings-restore-status');
+                statusEl.style.display = 'none';
+                showCloseModal('Error', 'Failed to restore settings: ' + e.message);
+            }
+        }
+    );
+}

@@ -1,2 +1,2 @@
-# Palo-Sync Application
+# NMS-Sync Application
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Palo-Sync Management Script
+# NMS-Sync Management Script
 
 set -e
 
@@ -8,21 +8,21 @@ cd "$SCRIPT_DIR"
 
 case "$1" in
     start)
-        echo "Starting Palo-Sync..."
+        echo "Starting NMS-Sync..."
         docker-compose up -d
         echo "Application started. Access at http://localhost:5001"
         ;;
     stop)
-        echo "Stopping Palo-Sync..."
+        echo "Stopping NMS-Sync..."
         docker-compose down
         ;;
     restart)
-        echo "Restarting Palo-Sync..."
+        echo "Restarting NMS-Sync..."
         docker-compose down
         docker-compose up -d
         ;;
     logs)
-        docker-compose logs -f palo-sync
+        docker-compose logs -f nms-sync
         ;;
     status)
         docker-compose ps
@@ -35,7 +35,7 @@ case "$1" in
         echo "Rebuild complete. Access at http://localhost:5001"
         ;;
     shell)
-        docker-compose exec palo-sync /bin/bash
+        docker-compose exec nms-sync /bin/bash
         ;;
     backup)
         echo "Available backups:"
@@ -47,7 +47,7 @@ case "$1" in
         docker system prune -f
         ;;
     *)
-        echo "Palo-Sync Management"
+        echo "NMS-Sync Management"
         echo ""
         echo "Usage: $0 {start|stop|restart|logs|status|rebuild|shell|backup|clean}"
         echo ""

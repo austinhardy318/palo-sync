@@ -33,7 +33,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ghcr.io/${{ github.repository_owner }}/palo-sync
+        images: ghcr.io/${{ github.repository_owner }}/nms-sync
         tags: |
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
@@ -55,15 +55,15 @@ jobs:
       run: |
         echo "## Published Docker Image" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Image**: \`ghcr.io/${{ github.repository_owner }}/palo-sync\`" >> $GITHUB_STEP_SUMMARY
+        echo "**Image**: \`ghcr.io/${{ github.repository_owner }}/nms-sync\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Tags**: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Pull Command" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-        echo "docker pull ghcr.io/${{ github.repository_owner }}/palo-sync:latest" >> $GITHUB_STEP_SUMMARY
+        echo "docker pull ghcr.io/${{ github.repository_owner }}/nms-sync:latest" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Image is now available at:" >> $GITHUB_STEP_SUMMARY
-        echo "https://github.com/${{ github.repository }}/pkgs/container/palo-sync" >> $GITHUB_STEP_SUMMARY
+        echo "https://github.com/${{ github.repository }}/pkgs/container/nms-sync" >> $GITHUB_STEP_SUMMARY
 

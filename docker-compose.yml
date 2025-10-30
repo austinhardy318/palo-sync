@@ -1,7 +1,7 @@
 services:
-  palo-sync:
-    image: ghcr.io/austinhardy318/palo-sync:latest
-    container_name: palo-sync
+  nms-sync:
+    image: ghcr.io/austinhardy318/nms-sync:latest
+    container_name: nms-sync
     ports:
       - "5001:5000"
     volumes:
@@ -9,18 +9,18 @@ services:
       - ./logs:/app/logs
       - ./settings:/app/settings
     environment:
-      # Production Panorama Configuration
-      - PROD_PANORAMA_HOST=${PROD_PANORAMA_HOST}
-      - PROD_PANORAMA_USERNAME=${PROD_PANORAMA_USERNAME}
-      - PROD_PANORAMA_PASSWORD=${PROD_PANORAMA_PASSWORD}
-      - PROD_PANORAMA_API_KEY=${PROD_PANORAMA_API_KEY}
+      # Production NMS Configuration
+      - PROD_NMS_HOST=${PROD_NMS_HOST}
+      - PROD_NMS_USERNAME=${PROD_NMS_USERNAME}
+      - PROD_NMS_PASSWORD=${PROD_NMS_PASSWORD}
+      - PROD_NMS_API_KEY=${PROD_NMS_API_KEY}
       
-      # Lab Panorama Configuration
-      - LAB_PANORAMA_HOST=${LAB_PANORAMA_HOST}
-      - LAB_PANORAMA_HOSTNAME=${LAB_PANORAMA_HOSTNAME}
-      - LAB_PANORAMA_USERNAME=${LAB_PANORAMA_USERNAME}
-      - LAB_PANORAMA_PASSWORD=${LAB_PANORAMA_PASSWORD}
-      - LAB_PANORAMA_API_KEY=${LAB_PANORAMA_API_KEY}
+      # Lab NMS Configuration
+      - LAB_NMS_HOST=${LAB_NMS_HOST}
+      - LAB_NMS_HOSTNAME=${LAB_NMS_HOSTNAME}
+      - LAB_NMS_USERNAME=${LAB_NMS_USERNAME}
+      - LAB_NMS_PASSWORD=${LAB_NMS_PASSWORD}
+      - LAB_NMS_API_KEY=${LAB_NMS_API_KEY}
       
       # Flask Configuration
       - FLASK_ENV=production
@@ -56,7 +56,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: palo-sync-redis
+    container_name: nms-sync-redis
     ports:
       - "6379:6379"
     volumes:

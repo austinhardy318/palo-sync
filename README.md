@@ -1,54 +1,49 @@
-# Palo-Sync
+# NMS-Sync
 
-[![CI/CD Pipeline](https://github.com/austinhardy318/palo-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/austinhardy318/palo-sync/actions/workflows/ci.yml)
+[![CI/CD Pipeline](https://github.com/austinhardy318/nms-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/austinhardy318/nms-sync/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-A Dockerized Flask web application for synchronizing Palo Alto Panorama configurations from production to lab environments. Features automatic backups, configuration diff checking, and a user-friendly web interface.
+NMS-Sync is a Dockerized web application for synchronizing network management system (NMS) configurations from production to lab environments. **Currently supports Palo Alto Networks Panorama**, with plans to support additional NMS platforms in the future.
 
-**Disclaimer**: "Panorama" and "Palo Alto Networks" are trademarks of Palo Alto Networks, Inc. This project is not affiliated with, endorsed by, or sponsored by Palo Alto Networks.
+> **⚠️ Disclaimer**: "Panorama" and "Palo Alto Networks" are trademarks of Palo Alto Networks, Inc. This project is not affiliated with, endorsed by, or sponsored by Palo Alto Networks. NMS-Sync is an independent, open-source project.
+
+## What It Does
+
+NMS-Sync provides a safe and automated way to:
+- **Sync configurations** from production Panorama to lab/test environments
+- **Preview changes** before applying them with built-in diff checking
+- **Automatically backup** configurations before sync operations
+- **Manage backups** with restore, download, and cleanup capabilities
+- **Track all operations** with detailed activity logs
 
 ## Features
 
-- **One-Way Sync**: Synchronize production Panorama configuration to lab environment
-- **Diff Checking**: Preview changes before synchronizing
-- **Automatic Backups**: Creates timestamped backups before sync operations
-- **Hostname Preservation**: Automatically preserves lab hostname during sync
-- **Dual Authentication**: Supports both username/password and API key authentication for Panorama
-- **Web Authentication**: Login page with support for local accounts and RADIUS
-- **Multi-Page Interface**: Separate pages for operations (Home) and configuration (Settings)
-- **Web GUI**: Modern web interface for easy management
-- **Activity Logging**: Track all operations with username attribution
-- **Backup Management**: List, download, and restore from previous backups
-- **Backup Cleanup**: Delete all backups with confirmation
-- **Settings Management**: Persistent settings saved to disk
-
-## Prerequisites
-
-- Docker and Docker Compose installed
-- Network access to both production and lab Panorama instances
-- Valid credentials (username/password or API key) for both Panorama instances
-- Sufficient privileges on lab Panorama to modify configuration
+- 🔄 **One-Way Sync**: Safely synchronize production configuration to lab environment
+- 🔍 **Diff Checking**: Preview all changes before synchronizing
+- 💾 **Automatic Backups**: Creates timestamped backups before sync operations
+- 🏷️ **Hostname Preservation**: Keeps lab hostname unchanged during sync
+- 🔐 **Flexible Authentication**: Supports API keys or username/password for Panorama, plus RADIUS for web access
+- 🌐 **Web Interface**: Modern, user-friendly GUI for all operations
+- 📊 **Activity Logging**: Track all operations with user attribution
+- ⚙️ **Configurable Settings**: Customize timeout, timezone, and diff ignore rules
 
 ## Quick Start
 
-### Installation
+### Prerequisites
 
-There are two ways to run Palo-Sync:
+- Docker and Docker Compose installed
+- Network access to production and lab Panorama instances
+- Valid credentials (username/password or API key) for both Panorama instances
+- Sufficient privileges on lab Panorama to modify configuration
 
-#### Option 1: Using Pre-built Image (Recommended)
+### 5-Minute Setup
 
-Use the pre-built Docker image from GitHub Container Registry (GHCR).
-
-
-
-1. **Save the the docker-compose.yml file from this repo.**
-   
-   Create a file named `docker-compose.yml` with the following content:
+1. **Create `docker-compose.yml`**:
    ```yaml
    services:
-     palo-sync:
-       image: ghcr.io/austinhardy318/palo-sync:latest
-       container_name: palo-sync
+     nms-sync:
+       image: ghcr.io/austinhardy318/nms-sync:latest
+       container_name: nms-sync
        ports:
          - "5001:5000"
        volumes:
@@ -57,242 +52,130 @@ Use the pre-built Docker image from GitHub Container Registry (GHCR).
          - ./settings:/app/settings
        environment:
          # Production Panorama Configuration
-         - PROD_PANORAMA_HOST=${PROD_PANORAMA_HOST}
-         - PROD_PANORAMA_USERNAME=${PROD_PANORAMA_USERNAME}
-         - PROD_PANORAMA_PASSWORD=${PROD_PANORAMA_PASSWORD}
-         - PROD_PANORAMA_API_KEY=${PROD_PANORAMA_API_KEY}
+         - PROD_NMS_HOST=${PROD_NMS_HOST}
+         - PROD_NMS_USERNAME=${PROD_NMS_USERNAME}
+         - PROD_NMS_PASSWORD=${PROD_NMS_PASSWORD}
+         - PROD_NMS_API_KEY=${PROD_NMS_API_KEY}
          
          # Lab Panorama Configuration
-         - LAB_PANORAMA_HOST=${LAB_PANORAMA_HOST}
-         - LAB_PANORAMA_HOSTNAME=${LAB_PANORAMA_HOSTNAME}
-         - LAB_PANORAMA_USERNAME=${LAB_PANORAMA_USERNAME}
-         - LAB_PANORAMA_PASSWORD=${LAB_PANORAMA_PASSWORD}
-         - LAB_PANORAMA_API_KEY=${LAB_PANORAMA_API_KEY}
+         - LAB_NMS_HOST=${LAB_NMS_HOST}
+         - LAB_NMS_HOSTNAME=${LAB_NMS_HOSTNAME}
+         - LAB_NMS_USERNAME=${LAB_NMS_USERNAME}
+         - LAB_NMS_PASSWORD=${LAB_NMS_PASSWORD}
+         - LAB_NMS_API_KEY=${LAB_NMS_API_KEY}
          
          # Flask Configuration
-         - FLASK_ENV=production
-         - FLASK_APP=app.main:app
          - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
          - SSL_VERIFY=${SSL_VERIFY:-false}
          
-         # GUI Authentication (optional)
+         # Web GUI Authentication (optional)
          - GUI_USERNAME=${GUI_USERNAME}
          - GUI_PASSWORD=${GUI_PASSWORD}
-         
-         # RADIUS Authentication (optional)
-         - RADIUS_ENABLED=${RADIUS_ENABLED:-false}
-         - RADIUS_SERVER=${RADIUS_SERVER}
-         - RADIUS_PORT=${RADIUS_PORT:-1812}
-         - RADIUS_SECRET=${RADIUS_SECRET}
-         - RADIUS_TIMEOUT=${RADIUS_TIMEOUT:-5}
-         
-         # Timezone (optional, defaults to UTC)
-         - TZ=${TZ:-UTC}
        restart: unless-stopped
-       healthcheck:
-         test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/config')"]
-         interval: 60s
-         timeout: 10s
-         retries: 3
-         start_period: 40s
-   
-   volumes:
-     backups:
-     logs:
    ```
 
-2. **Create the environment file for testing. Set in OS for production.**
-   
-   Create a file named `.env` with your Panorama credentials (see Option 2, step 3 for detailed configuration):
+2. **Create `.env` file**:
    ```env
    # Production Panorama Configuration
-   PROD_PANORAMA_HOST=prod-panorama.example.com
-   PROD_PANORAMA_USERNAME=admin
-   PROD_PANORAMA_PASSWORD=your_password_here
+   PROD_NMS_HOST=prod-panorama.example.com
+   PROD_NMS_USERNAME=admin
+   PROD_NMS_PASSWORD=your_password_here
+   # PROD_NMS_API_KEY=your_api_key_here
    
    # Lab Panorama Configuration
-   LAB_PANORAMA_HOST=lab-panorama.example.com
-   LAB_PANORAMA_USERNAME=admin
-   LAB_PANORAMA_PASSWORD=your_password_here
+   LAB_NMS_HOST=lab-panorama.example.com
+   LAB_NMS_USERNAME=admin
+   LAB_NMS_PASSWORD=your_password_here
+   # LAB_NMS_API_KEY=your_api_key_here
    
    # Flask Configuration
-   FLASK_SECRET_KEY=your-secret-key-here
+   FLASK_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
    
    # Web GUI Authentication (optional)
    GUI_USERNAME=admin
    GUI_PASSWORD=changeme
    ```
-   
-   **Note**: Generate a secure `FLASK_SECRET_KEY` with: `python -c "import secrets; print(secrets.token_hex(32))"`
 
-4. **Pull and start the container**
+3. **Start the application**:
    ```bash
    docker compose up -d
    ```
 
-5. **Access the application at http://localhost:5001**
-
-#### Option 2: Building from Source
-
-1. **Clone this repository**
-   ```bash
-   git clone https://github.com/austinhardy318/palo-sync.git
-   cd palo-sync
-   ```
-
-2. **Copy the environment file template**
-   ```bash
-   cp env.example .env
-   ```
-
-3. **Edit `.env` file with your Panorama credentials**
-   ```env
-   # Production Panorama Configuration
-   PROD_PANORAMA_HOST=prod-panorama.example.com
-   PROD_PANORAMA_USERNAME=admin
-   PROD_PANORAMA_PASSWORD=your_password_here
-   # PROD_PANORAMA_API_KEY=your_api_key_here
-
-   # Lab Panorama Configuration
-   LAB_PANORAMA_HOST=lab-panorama.example.com
-   LAB_PANORAMA_USERNAME=admin
-   LAB_PANORAMA_PASSWORD=your_password_here
-   # LAB_PANORAMA_API_KEY=your_api_key_here
-
-   # Web GUI Authentication (optional)
-   GUI_USERNAME=admin
-   GUI_PASSWORD=changeme
-
-   # RADIUS Authentication (optional)
-   RADIUS_ENABLED=false
-   RADIUS_SERVER=radius.example.com
-   RADIUS_SECRET=your_secret
-   ```
-
-   **Note**: If Panorama API keys are provided, they will be used automatically. Otherwise, username/password will be used.
-
-4. **Build and start the container**
-   
-   Using the docker-compose.build.yml:
-   ```bash
-   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
-   ```
-
-5. **Access the application**
+4. **Access the web interface**:
    ```
    http://localhost:5001
    ```
-   
-   **Note**: If you configured `GUI_USERNAME` and `GUI_PASSWORD`, you'll be prompted to login. Leave these empty for quick testing without authentication.
 
-**Note**: Palo-Sync is provided "as is" under the GPL-3.0 license. Always test in a lab environment first before using in production.
+That's it! You can now use the web interface to sync configurations between your Panorama instances.
 
-## Management Script
+### Building from Source
 
-Palo-Sync includes a convenient management script (`manage.sh`) for common operations:
+If you prefer to build from source:
+
+```bash
+git clone https://github.com/austinhardy318/nms-sync.git
+cd nms-sync
+cp env.example .env
+# Edit .env with your credentials
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+## Usage
+
+### Basic Workflow
+
+1. **Check Status**: Click "Refresh Status" to verify connections to both Panorama instances
+2. **Preview Changes**: Click "Run Diff Check" to see what will change
+3. **Sync Configuration**: 
+   - Ensure "Create backup before sync" is checked (recommended)
+   - Click "Execute Sync" to synchronize production configuration to lab
+4. **Monitor**: Watch the activity log for operation details
+
+### Management Script
+
+NMS-Sync includes a convenient management script (`manage.sh`):
 
 ```bash
 ./manage.sh start     # Start the application
 ./manage.sh stop      # Stop the application
 ./manage.sh restart   # Restart the application
-./manage.sh logs      # View application logs (follow mode)
+./manage.sh logs      # View application logs
 ./manage.sh status    # Check container status
-./manage.sh rebuild   # Rebuild containers with no cache
 ./manage.sh shell     # Open shell in container
-./manage.sh backup    # List backup files
-./manage.sh clean     # Remove containers and clean up
-./manage.sh           # Show help message
 ```
 
-For example, to view logs:
+## Configuration
+
+### Required Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PROD_NMS_HOST` | Production Panorama hostname or IP |
+| `PROD_NMS_USERNAME` / `PROD_NMS_PASSWORD` | Production Panorama credentials (or use `PROD_NMS_API_KEY`) |
+| `LAB_NMS_HOST` | Lab Panorama hostname or IP |
+| `LAB_NMS_USERNAME` / `LAB_NMS_PASSWORD` | Lab Panorama credentials (or use `LAB_NMS_API_KEY`) |
+| `FLASK_SECRET_KEY` | Flask secret key (generate with: `python -c "import secrets; print(secrets.token_hex(32))"`) |
+
+### Optional Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `LAB_NMS_HOSTNAME` | Lab hostname to preserve during sync |
+| `GUI_USERNAME` / `GUI_PASSWORD` | Web GUI authentication credentials |
+| `RADIUS_ENABLED` | Enable RADIUS authentication (true/false) |
+| `SSL_VERIFY` | Enable SSL verification (default: false) |
+
+**Note**: Either username/password OR API key is required for each Panorama instance.
+
+## REST API
+
+NMS-Sync provides a REST API for programmatic access:
+
 ```bash
-./manage.sh logs
-```
-
-The script provides a simpler interface than using `docker-compose` commands directly.
-
-## Usage
-
-### First Sync
-
-1. Click **"Refresh Status"** to verify connections to both Panorama instances
-2. Click **"Run Diff Check"** to see what changes will be made
-3. Ensure **"Create backup before sync"** is checked (recommended)
-4. Click **"Execute Sync"** to sync production configuration to lab
-5. Monitor the activity log for operation details
-
-### Workflow
-
-1. **Check Status**: The status section shows connection status to both Panorama instances
-2. **Run Diff Check**: Click "Run Diff Check" to preview what changes will be made
-3. **Review Differences**: Review the diff summary and details
-4. **Execute Sync**: Click "Execute Sync" to perform the synchronization
-   - Enable backup creation (recommended) to create a timestamped backup before sync
-5. **Monitor Results**: Check the activity log and sync results
-
-### Hostname Preservation
-
-By default, the lab Panorama hostname is automatically preserved during sync operations. This prevents the production hostname from overwriting the lab hostname. This feature can be enabled/disabled in the Settings page.
-
-### Backup Management
-
-- All backups are stored in the `backups/` directory
-- Backups are automatically created before sync operations (if enabled)
-- Use the "Restore" button to restore a previous configuration
-- Backups can be downloaded directly from the host filesystem
-
-### Settings Page
-
-The Settings page (accessible via navigation) allows you to:
-- Configure default sync behavior (create backup, commit configuration)
-- Enable/disable hostname preservation
-- View connection information
-- Manage backups (delete all backups)
-- Settings are saved to disk and persist across container restarts
-
-### Authentication
-
-The application supports multiple authentication methods:
-
-#### Web GUI Authentication Options
-
-1. **Local Authentication** (Simple)
-   - Set `GUI_USERNAME` and `GUI_PASSWORD` in `.env` file
-   - Basic username/password authentication
-
-2. **RADIUS Authentication** (Advanced)
-   - Set `RADIUS_ENABLED=true` in `.env` file
-   - Configure RADIUS server settings (`RADIUS_SERVER`, `RADIUS_SECRET`, etc.)
-   - Users can authenticate with their RADIUS credentials
-
-3. **Combined Approach**
-   - Can use both local and RADIUS authentication
-   - Local accounts checked first, then RADIUS if user not found
-
-**Note**: All authentication attempts are logged with username attribution in the Activity Log.
-
-### REST API Endpoints
-
-The application also provides a REST API for programmatic access:
-
-- `GET /api/status` - Get connection status
-- `POST /api/diff` - Generate configuration diff
-- `POST /api/sync` - Execute synchronization
-- `GET /api/backups` - List available backups
-- `POST /api/backups/restore` - Restore a backup
-- `POST /api/backups/delete` - Delete a backup
-- `POST /api/backups/cleanup` - Delete all backups
-- `GET /api/backups/download/<filename>` - Download a backup
-- `GET /api/logs` - Get operation logs
-- `GET /api/settings` - Get application settings
-- `POST /api/settings` - Save application settings
-
-Example API usage:
-```bash
-# Check status
+# Check connection status
 curl http://localhost:5001/api/status
 
-# Run diff
+# Preview changes
 curl -X POST http://localhost:5001/api/diff
 
 # Execute sync
@@ -301,154 +184,57 @@ curl -X POST http://localhost:5001/api/sync \
   -d '{"create_backup": true}'
 ```
 
-## Configuration
+Full API documentation: See `/api/status`, `/api/diff`, `/api/sync`, `/api/backups`, `/api/logs`, `/api/settings`
 
-### Environment Variables
+## Troubleshooting
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PROD_PANORAMA_HOST` | Yes | Production Panorama hostname or IP |
-| `PROD_PANORAMA_USERNAME` | Yes* | Production Panorama username |
-| `PROD_PANORAMA_PASSWORD` | Yes* | Production Panorama password |
-| `PROD_PANORAMA_API_KEY` | Yes* | Production Panorama API key |
-| `LAB_PANORAMA_HOST` | Yes | Lab Panorama hostname or IP |
-| `LAB_PANORAMA_USERNAME` | Yes* | Lab Panorama username |
-| `LAB_PANORAMA_PASSWORD` | Yes* | Lab Panorama password |
-| `LAB_PANORAMA_API_KEY` | Yes* | Lab Panorama API key |
-| `LAB_PANORAMA_HOSTNAME` | No | Lab hostname to preserve during sync |
-| `GUI_USERNAME` | No | Web GUI username for local auth |
-| `GUI_PASSWORD` | No | Web GUI password for local auth |
-| `RADIUS_ENABLED` | No | Enable RADIUS authentication (true/false) |
-| `RADIUS_SERVER` | Yes** | RADIUS server hostname or IP |
-| `RADIUS_PORT` | No | RADIUS server port (default: 1812) |
-| `RADIUS_SECRET` | Yes** | RADIUS shared secret |
-| `FLASK_SECRET_KEY` | Yes | Flask secret key for session security (generate with: `python -c "import secrets; print(secrets.token_hex(32))"`) |
-| `SSL_VERIFY` | No | Enable SSL verification (default: false) |
+### Common Issues
 
-*Either username/password OR API key is required for each Panorama instance  
-**Required if RADIUS_ENABLED=true
+- **Cannot connect to Panorama**: Verify hostnames, credentials, and network connectivity
+- **Sync fails**: Check logs with `./manage.sh logs` or verify lab Panorama has commit privileges
+- **Timeout errors**: Adjust timeout settings in the Settings page
+- **SSL errors**: Set `SSL_VERIFY=false` in `.env` for lab environments
 
-### Security Best Practices
+### Viewing Logs
+
+```bash
+# Using management script
+./manage.sh logs
+
+# Using docker compose
+docker compose logs -f nms-sync
+```
+
+## Roadmap
+
+NMS-Sync currently supports **Palo Alto Networks Panorama**. Future versions may include support for:
+
+- Other network management systems
+- Additional configuration synchronization features
+- Enhanced diff visualization
+- Batch synchronization capabilities
+
+## Security Best Practices
 
 1. **API Keys**: Prefer API keys over passwords when possible
 2. **Read-Only Access**: Use read-only API access for production Panorama where possible
 3. **Secure Storage**: Never commit `.env` file to version control
 4. **Network Security**: Restrict network access to the Docker container
-5. **GUI Authentication**: Consider setting `GUI_USERNAME` and `GUI_PASSWORD` in production environments
-
-## Troubleshooting
-
-### Connection Issues
-
-- **Cannot connect to Panorama**: Verify hostnames, credentials, and network connectivity
-- **API key not working**: Ensure the API key has sufficient permissions
-- **Timeout errors**: Check firewall rules and network latency
-- **SSL certificate errors**: Set `SSL_VERIFY=false` in `.env` for lab environments
-
-### Sync Issues
-
-- **Sync fails mid-operation**: Check logs for specific errors
-- **Configuration not applied**: Verify lab Panorama has commit privileges
-- **Large configs timeout**: Increase timeout settings in Docker if needed
-
-### Authentication Issues
-
-- **Login fails**: Verify `GUI_USERNAME` and `GUI_PASSWORD` in `.env` are set correctly
-- **RADIUS not working**: Check RADIUS configuration and network connectivity
-- **Session timeout**: Sessions expire after 8 hours of inactivity
-
-### Viewing Logs
-
-View container logs using the management script:
-```bash
-./manage.sh logs
-```
-
-Or using docker-compose directly:
-```bash
-docker-compose logs -f palo-sync
-```
-
-View operation logs in the web interface under "Activity Log" section
-
-### Resetting
-
-To reset the application using the management script:
-```bash
-./manage.sh restart
-```
-
-Or using docker-compose directly:
-```bash
-docker-compose down
-docker-compose up -d
-```
-
-## Files and Directories
-
-```
-.
-├── app/
-│   ├── __init__.py           # Package initialization
-│   ├── main.py               # Flask application
-│   ├── config.py             # Configuration management
-│   ├── auth.py               # Authentication module
-│   ├── panorama_sync.py      # Core sync logic
-│   ├── templates/
-│   │   ├── index.html        # Home page
-│   │   ├── settings.html     # Settings page
-│   │   └── login.html        # Login page
-│   └── static/
-│       ├── style.css         # Stylesheet
-│       ├── script.js         # Home page JavaScript
-│       └── settings.js       # Settings page JavaScript
-├── backups/                  # Backup storage (volume mount)
-├── logs/                     # Application logs (volume mount)
-├── settings/                 # Settings storage (volume mount)
-│   └── user_settings.json    # Application settings
-├── documentation/            # Development documentation
-│   └── api-guide/            # Palo Alto API reference
-├── Dockerfile                # Docker image definition
-├── docker-compose.yml        # Docker Compose configuration (uses pre-built image)
-├── docker-compose.build.yml  # Docker Compose override for building from source
-├── requirements.txt          # Python dependencies
-├── manage.sh                 # Management script
-├── env.example               # Environment template
-├── .env                      # Environment file (not in git)
-└── README.md                 # This file
-```
-
-## Backup Location
-
-Backups are stored in the `backups/` directory on the host filesystem. Each backup is named:
-
-```
-{env}_backup_{timestamp}.xml
-```
-
-For example:
-```
-lab_backup_20240115_143022.xml
-```
-
-## Limitations
-
-- This is a one-way sync: changes are pushed from production to lab only
-- Large configurations may take several minutes to process
-- Rollback requires manual backup restoration
-- Network latency affects sync performance
+5. **GUI Authentication**: Always set `GUI_USERNAME` and `GUI_PASSWORD` in production
 
 ## License
 
 This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
 
-**Disclaimer**: Palo-Sync software is provided "as is" without warranty of any kind. Always test in a lab environment first and ensure you have proper backups before using in production.
+## Disclaimer
+
+**⚠️ Important**: This tool modifies Panorama configurations. Always test in a lab environment first and ensure you have proper backups before using in production. NMS-Sync software is provided "as is" without warranty of any kind.
+
+**Trademark Notice**: "Panorama" and "Palo Alto Networks" are trademarks of Palo Alto Networks, Inc. This project is not affiliated with, endorsed by, or sponsored by Palo Alto Networks.
 
 ## Support
 
-For issues or questions, please check the troubleshooting section or review the application logs.
-
----
-
-**Warning**: This tool modifies Panorama configurations. Always test in a lab environment first and ensure you have proper backups before using in production.
-
+For issues or questions:
+1. Check the [Troubleshooting](#troubleshooting) section
+2. Review application logs
+3. Check the [Issues](https://github.com/austinhardy318/nms-sync/issues) page

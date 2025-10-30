@@ -1,7 +1,8 @@
-// Palo-Sync Web GUI JavaScript
+// NMS-Sync Web GUI JavaScript
 
 let confirmCallback = null;
 let logsAutoRefreshInterval = null; // Store interval ID for auto-refresh
+let currentTimezone = 'UTC';
 
 // Get CSRF token - try multiple methods
 async function getCsrfToken() {
@@ -103,6 +104,13 @@ async function loadSettings() {
             // Set up auto-refresh based on checkbox state
             setupLogsAutoRefresh(defaultAutoRefresh, refreshInterval);
         }
+
+        // Apply timezone
+        if (typeof settings.timezone === 'string' && settings.timezone.trim()) {
+            currentTimezone = settings.timezone.trim();
+        } else {
+            currentTimezone = 'UTC';
+        }
     } catch (e) {
         console.error('Error loading settings:', e);
     }
@@ -148,6 +156,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('run-diff').addEventListener('click', runDiff);
     document.getElementById('run-sync').addEventListener('click', confirmSync);
     document.getElementById('refresh-backups').addEventListener('click', loadBackups);
+    const createBackupBtn = document.getElementById('create-lab-backup');
+    if (createBackupBtn) {
+        createBackupBtn.addEventListener('click', createLabBackup);
+    }
     
     // Refresh logs button - ensure it works properly
     const refreshLogsBtn = document.getElementById('refresh-logs');
@@ -406,6 +418,12 @@ async function loadBackups() {
         const response = await fetch('/api/backups');
         const data = await response.json();
         
+        // Gracefully handle missing or non-array backups
+        if (!data || !Array.isArray(data.backups)) {
+            tbody.innerHTML = '<tr><td colspan="4" class="loading">No backups found</td></tr>';
+            return;
+        }
+
         if (data.backups.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="loading">No backups found</td></tr>';
             return;
@@ -494,26 +512,23 @@ async function executeRestore(backupPath) {
         const data = await response.json();
         
         if (data.success) {
-            showModal(
+            showCloseModal(
                 'Success',
                 'Backup restored successfully!',
                 () => {
-                    hideModal();
                     loadBackups(); // Refresh backups list
                 }
             );
         } else {
-            showModal(
+            showCloseModal(
                 'Restore Failed',
-                `Restore failed: ${data.error}`,
-                () => hideModal()
+                `Restore failed: ${data.error}`
             );
         }
     } catch (error) {
-        showModal(
+        showCloseModal(
             'Error',
-            `Error: ${error.message}`,
-            () => hideModal()
+            `Error: ${error.message}`
         );
     }
 }
@@ -525,6 +540,32 @@ function deleteBackup(backupPath) {
         'Are you sure you want to delete this backup? This action cannot be undone.',
         () => executeDelete(backupPath)
     );
+}
+
+// Create Lab backup
+async function createLabBackup() {
+    const btn = document.getElementById('create-lab-backup');
+    if (btn) {
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.innerHTML = '<span class="spinner"></span>Creating...';
+        try {
+            const response = await fetchWithCsrf('/api/backups/create', { method: 'POST' });
+            const data = await response.json();
+            if (data.success) {
+                showCloseModal('Success', `Backup created: ${data.filename || data.backup_path}` , () => {
+                    loadBackups();
+                });
+            } else {
+                showCloseModal('Create Backup Failed', `Error: ${data.error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            showCloseModal('Error', `Error creating backup: ${error.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText || 'Create Lab Backup';
+        }
+    }
 }
 
 async function executeDelete(backupPath) {
@@ -539,11 +580,10 @@ async function executeDelete(backupPath) {
         const data = await response.json();
         
         if (data.success) {
-            showModal(
+            showCloseModal(
                 'Success',
                 data.message || 'Backup deleted successfully!',
                 () => {
-                    hideModal();
                     loadBackups(); // Reload the backups list to update the display
                 }
             );
@@ -742,6 +782,30 @@ function hideModal() {
     confirmCallback = null;
 }
 
+// Show an informational modal with a single Close button (no cancel)
+function showCloseModal(title, message, onClose) {
+    const modal = document.getElementById('confirm-modal');
+    const confirmBtn = document.getElementById('confirm-yes');
+    const cancelBtn = document.getElementById('confirm-no');
+    const originalText = confirmBtn.textContent;
+    const originalCancelDisplay = cancelBtn.style.display;
+
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-message').textContent = message;
+
+    confirmBtn.textContent = 'Close';
+    cancelBtn.style.display = 'none';
+    confirmCallback = () => {
+        try { if (typeof onClose === 'function') onClose(); } finally {
+            hideModal();
+            // Restore defaults for future confirmations
+            confirmBtn.textContent = originalText || 'Confirm';
+            cancelBtn.style.display = originalCancelDisplay || '';
+        }
+    };
+    modal.classList.add('show');
+}
+
 // Utility functions
 function escapeHtml(text) {
     if (text === null || text === undefined) {
@@ -804,7 +868,15 @@ function formatBytes(bytes) {
 }
 
 function formatTimestamp(timestamp) {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
+    try {
+        // Treat server timestamps without timezone as UTC
+        const hasTz = typeof timestamp === 'string' && /[zZ]|[\+\-]\d{2}:?\d{2}$/.test(timestamp);
+        const src = (!hasTz && typeof timestamp === 'string') ? (timestamp + 'Z') : timestamp;
+        const date = new Date(src);
+        return date.toLocaleString(undefined, { timeZone: currentTimezone });
+    } catch (e) {
+        const date = new Date(timestamp);
+        return date.toLocaleString();
+    }
 }
 

@@ -9,6 +9,7 @@
 
 # Documentation (not needed in container)
 documentation/
+dev-docs/
 *.md
 !README.md
 
@@ -61,4 +62,8 @@ tests/
 *.tmp
 *.bak
 *.swp
+
+# Session/cookie files
+cookiejar
+*.cookiejar
 

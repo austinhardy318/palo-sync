@@ -1,5 +1,5 @@
 """
-Authentication module for Palo-Sync
+Authentication module for NMS-Sync
 Supports local accounts and RADIUS authentication
 """
 

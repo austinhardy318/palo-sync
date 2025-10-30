@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Palo-Sync</title>
+    <title>NMS-Sync</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <!-- DOMPurify for XSS protection -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
@@ -14,7 +14,7 @@
     <!-- Navigation Bar -->
     <nav class="navbar">
         <div class="nav-container">
-            <div class="nav-brand">🔀 Palo-Sync</div>
+            <div class="nav-brand">🔀 NMS-Sync</div>
             <div class="nav-links">
                 <a href="/" class="nav-link">Home</a>
                 <a href="/settings" class="nav-link">Settings</a>
@@ -25,8 +25,8 @@
 
     <div class="container">
         <header>
-            <h1>Panorama Configuration Sync</h1>
-            <p>Synchronize production Palo Alto Panorama configuration to lab environment</p>
+            <h1>NMS Configuration Sync</h1>
+            <p>Synchronize production NMS configuration to lab environment</p>
         </header>
 
         <!-- Status Section -->
@@ -34,12 +34,12 @@
             <h2>Connection Status</h2>
             <div class="status-grid">
                 <div class="status-item">
-                    <h3>Production Panorama</h3>
+                    <h3>Production NMS</h3>
                     <div id="prod-status" class="status-badge">Checking...</div>
                     <div id="prod-details" class="status-details"></div>
                 </div>
                 <div class="status-item">
-                    <h3>Lab Panorama</h3>
+                    <h3>Lab NMS</h3>
                     <div id="lab-status" class="status-badge">Checking...</div>
                     <div id="lab-details" class="status-details"></div>
                 </div>
@@ -78,7 +78,10 @@
         <!-- Backups Section -->
         <section id="backups-section" class="card">
             <h2>Backup Management</h2>
-            <button id="refresh-backups" class="btn btn-secondary">Refresh List</button>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <button id="refresh-backups" class="btn btn-secondary">Refresh List</button>
+                <button id="create-lab-backup" class="btn btn-primary">Create Lab Backup</button>
+            </div>
             <table id="backups-table" class="backups-table">
                 <thead>
                     <tr>

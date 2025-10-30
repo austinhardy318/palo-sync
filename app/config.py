@@ -1,5 +1,5 @@
 """
-Configuration management for Palo-Sync
+Configuration management for NMS-Sync
 Supports both username/password and API key authentication
 """
 
@@ -16,18 +16,18 @@ load_dotenv()
 class Config:
     """Application configuration with dual authentication support"""
     
-    # Production Panorama Configuration
-    PROD_HOST: str = os.getenv('PROD_PANORAMA_HOST', '')
-    PROD_USERNAME: Optional[str] = os.getenv('PROD_PANORAMA_USERNAME')
-    PROD_PASSWORD: Optional[str] = os.getenv('PROD_PANORAMA_PASSWORD')
-    PROD_API_KEY: Optional[str] = os.getenv('PROD_PANORAMA_API_KEY')
+    # Production NMS Configuration
+    PROD_HOST: str = os.getenv('PROD_NMS_HOST', '')
+    PROD_USERNAME: Optional[str] = os.getenv('PROD_NMS_USERNAME')
+    PROD_PASSWORD: Optional[str] = os.getenv('PROD_NMS_PASSWORD')
+    PROD_API_KEY: Optional[str] = os.getenv('PROD_NMS_API_KEY')
     
-    # Lab Panorama Configuration
-    LAB_HOST: str = os.getenv('LAB_PANORAMA_HOST', '')
-    LAB_HOSTNAME: Optional[str] = os.getenv('LAB_PANORAMA_HOSTNAME')  # Hostname to preserve
-    LAB_USERNAME: Optional[str] = os.getenv('LAB_PANORAMA_USERNAME')
-    LAB_PASSWORD: Optional[str] = os.getenv('LAB_PANORAMA_PASSWORD')
-    LAB_API_KEY: Optional[str] = os.getenv('LAB_PANORAMA_API_KEY')
+    # Lab NMS Configuration
+    LAB_HOST: str = os.getenv('LAB_NMS_HOST', '')
+    LAB_HOSTNAME: Optional[str] = os.getenv('LAB_NMS_HOSTNAME')  # Hostname to preserve
+    LAB_USERNAME: Optional[str] = os.getenv('LAB_NMS_USERNAME')
+    LAB_PASSWORD: Optional[str] = os.getenv('LAB_NMS_PASSWORD')
+    LAB_API_KEY: Optional[str] = os.getenv('LAB_NMS_API_KEY')
     
     @staticmethod
     def is_valid_hostname(hostname: str) -> bool:
@@ -100,7 +100,7 @@ class Config:
     @classmethod
     def get_prod_auth(cls) -> Dict[str, Any]:
         """
-        Returns production Panorama authentication parameters
+        Returns production NMS authentication parameters
         Prioritizes API key if available, otherwise uses username/password
         """
         if cls.PROD_API_KEY:
@@ -108,12 +108,12 @@ class Config:
         elif cls.PROD_USERNAME and cls.PROD_PASSWORD:
             return {'username': cls.PROD_USERNAME, 'password': cls.PROD_PASSWORD}
         else:
-            raise ValueError("Production Panorama: No valid authentication credentials found")
+            raise ValueError("Production NMS: No valid authentication credentials found")
     
     @classmethod
     def get_lab_auth(cls) -> Dict[str, Any]:
         """
-        Returns lab Panorama authentication parameters
+        Returns lab NMS authentication parameters
         Prioritizes API key if available, otherwise uses username/password
         """
         if cls.LAB_API_KEY:
@@ -121,7 +121,7 @@ class Config:
         elif cls.LAB_USERNAME and cls.LAB_PASSWORD:
             return {'username': cls.LAB_USERNAME, 'password': cls.LAB_PASSWORD}
         else:
-            raise ValueError("Lab Panorama: No valid authentication credentials found")
+            raise ValueError("Lab NMS: No valid authentication credentials found")
     
     @classmethod
     def validate(cls) -> tuple[bool, list[str]]:
@@ -131,20 +131,20 @@ class Config:
         """
         errors = []
         
-        # Check production Panorama hostname
-        is_valid, error_msg = cls.validate_hostname(cls.PROD_HOST, "PROD_PANORAMA_HOST")
+        # Check production NMS hostname
+        is_valid, error_msg = cls.validate_hostname(cls.PROD_HOST, "PROD_NMS_HOST")
         if not is_valid:
-            errors.append(error_msg or "PROD_PANORAMA_HOST is required")
+            errors.append(error_msg or "PROD_NMS_HOST is required")
         
         try:
             cls.get_prod_auth()
         except ValueError as e:
             errors.append(str(e))
         
-        # Check lab Panorama hostname
-        is_valid, error_msg = cls.validate_hostname(cls.LAB_HOST, "LAB_PANORAMA_HOST")
+        # Check lab NMS hostname
+        is_valid, error_msg = cls.validate_hostname(cls.LAB_HOST, "LAB_NMS_HOST")
         if not is_valid:
-            errors.append(error_msg or "LAB_PANORAMA_HOST is required")
+            errors.append(error_msg or "LAB_NMS_HOST is required")
         
         try:
             cls.get_lab_auth()
