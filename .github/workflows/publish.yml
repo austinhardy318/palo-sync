@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*.*.*'  # Triggers on version tags like v1.0.0
-    branches:
-      - main      # Also publish on main branch pushes (optional)
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
@@ -37,12 +35,9 @@ jobs:
       with:
         images: ghcr.io/${{ github.repository_owner }}/palo-sync
         tags: |
-          type=ref,event=branch
-          type=ref,event=pr
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=latest
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
