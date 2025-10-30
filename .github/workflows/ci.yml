@@ -48,7 +48,7 @@ jobs:
     
     - name: Test main module with credentials
       run: |
-        docker run --rm -e PROD_PANORAMA_HOST=test -e PROD_PANORAMA_USERNAME=test -e PROD_PANORAMA_PASSWORD=test -e LAB_PANORAMA_HOST=test -e LAB_PANORAMA_USERNAME=test -e LAB_PANORAMA_PASSWORD=test -e FLASK_SECRET_KEY=test_secret_key \
+        docker run --rm -e PROD_PANORAMA_HOST=test -e PROD_PANORAMA_USERNAME=test -e PROD_PANORAMA_PASSWORD=test -e LAB_PANORAMA_HOST=test -e LAB_PANORAMA_USERNAME=test -e LAB_PANORAMA_PASSWORD=test -e FLASK_SECRET_KEY=test_secret_key -e REDIS_URL=redis://localhost:6379/0 \
           palo-sync:latest python -c "import app.main; print('✓ Main module loads successfully with test credentials')"
     
     - name: Check for common issues

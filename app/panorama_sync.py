@@ -3,14 +3,16 @@ Core Panorama synchronization module
 Handles diff checking, backup creation, and sync operations
 """
 
+import os
 import logging
 import io
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
 import xml.etree.ElementTree as ET
+from threading import Lock
 
 from panos import panorama
 from panos.device import SystemSettings
@@ -47,6 +49,12 @@ logger = logging.getLogger(__name__)
 
 class PanoramaSync:
     """Handle Panorama synchronization operations"""
+    
+    # API key cache with TTL (default: 1 hour)
+    # Structure: {host: {'key': api_key, 'expires': datetime}}
+    _api_key_cache: Dict[str, Dict[str, Any]] = {}
+    _cache_lock = Lock()
+    _cache_ttl_hours = int(os.getenv('API_KEY_CACHE_TTL_HOURS', '1'))
     
     def __init__(self):
         self.prod_auth = Config.get_prod_auth()
@@ -107,9 +115,28 @@ class PanoramaSync:
         return results
     
     def _get_api_key(self, host: str, auth: Dict[str, Any]) -> str:
-        """Get API key from host and auth credentials"""
+        """
+        Get API key from host and auth credentials
+        Uses cached API key if available and not expired
+        API keys are cached with TTL to prevent unnecessary regeneration
+        """
+        # Check if API key is provided directly in auth
         if 'api_key' in auth:
             return auth['api_key']
+        
+        # Check cache first (thread-safe)
+        with self._cache_lock:
+            cache_key = f"{host}:{auth.get('username', 'unknown')}"
+            if cache_key in self._api_key_cache:
+                cached = self._api_key_cache[cache_key]
+                # Check if cache entry is still valid
+                if cached.get('expires', datetime.min) > datetime.now():
+                    logger.debug(f"Using cached API key for {host}")
+                    return cached['key']
+                else:
+                    # Expired, remove from cache
+                    logger.debug(f"Cached API key expired for {host}, fetching new one")
+                    del self._api_key_cache[cache_key]
         
         # Get API key from credentials
         api_key_url = f"https://{host}/api/?type=keygen&user={auth['username']}&password={auth['password']}"
@@ -126,8 +153,16 @@ class PanoramaSync:
                 key_elem = root.find('.//key')
                 if key_elem is not None and key_elem.text:
                     api_key = key_elem.text
-                    # Cache the API key in the auth dict for future use
-                    auth['api_key'] = api_key
+                    
+                    # Cache the API key with expiration (thread-safe)
+                    with self._cache_lock:
+                        expires = datetime.now() + timedelta(hours=self._cache_ttl_hours)
+                        self._api_key_cache[cache_key] = {
+                            'key': api_key,
+                            'expires': expires
+                        }
+                        logger.debug(f"Cached API key for {host}, expires at {expires}")
+                    
                     return api_key
                 else:
                     raise Exception("API key not found in response")
@@ -145,6 +180,31 @@ class PanoramaSync:
             error_msg = sanitize_error_message(str(e))
             logger.error(f"Error getting API key: {error_msg}")
             raise
+    
+    @classmethod
+    def clear_api_key_cache(cls, host: Optional[str] = None) -> None:
+        """
+        Clear API key cache
+        If host is provided, only clears cache for that host
+        Otherwise clears all cached API keys
+        """
+        with cls._cache_lock:
+            if host:
+                # Remove entries for specific host
+                keys_to_remove = [k for k in cls._api_key_cache.keys() if k.startswith(f"{host}:")]
+                for key in keys_to_remove:
+                    del cls._api_key_cache[key]
+                logger.info(f"Cleared API key cache for {host}")
+            else:
+                # Clear all cache
+                cls._api_key_cache.clear()
+                logger.info("Cleared all API key caches")
+    
+    def __del__(self):
+        """Cleanup: Clear API keys from memory when object is destroyed"""
+        # Note: This won't always be called due to Python's garbage collection,
+        # but it's good practice to have it
+        self.clear_api_key_cache()
     
     def export_config(self, host: str, auth: Dict[str, Any], label: str = "config") -> str:
         """

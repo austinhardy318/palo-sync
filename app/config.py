@@ -4,8 +4,10 @@ Supports both username/password and API key authentication
 """
 
 import os
+import re
+import ipaddress
 from dotenv import load_dotenv
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,6 +28,47 @@ class Config:
     LAB_USERNAME: Optional[str] = os.getenv('LAB_PANORAMA_USERNAME')
     LAB_PASSWORD: Optional[str] = os.getenv('LAB_PANORAMA_PASSWORD')
     LAB_API_KEY: Optional[str] = os.getenv('LAB_PANORAMA_API_KEY')
+    
+    @staticmethod
+    def is_valid_hostname(hostname: str) -> bool:
+        """
+        Validate hostname format (DNS name or IP address)
+        Returns True if valid, False otherwise
+        """
+        if not hostname or len(hostname) > 253:
+            return False
+        
+        # Check if it's a valid IP address
+        try:
+            ipaddress.ip_address(hostname)
+            return True
+        except ValueError:
+            pass
+        
+        # Check if it's a valid DNS hostname
+        # Allowed characters: alphanumeric, hyphen, dot
+        # Must not start or end with hyphen or dot
+        # Each label must be 1-63 characters
+        if re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', hostname):
+            # Check each label length
+            labels = hostname.split('.')
+            if all(1 <= len(label) <= 63 for label in labels):
+                return True
+        
+        return False
+    
+    @staticmethod
+    def validate_hostname(hostname: str, field_name: str) -> Tuple[bool, Optional[str]]:
+        """
+        Validate hostname and return (is_valid, error_message)
+        """
+        if not hostname:
+            return False, f"{field_name} is required"
+        
+        if not Config.is_valid_hostname(hostname):
+            return False, f"{field_name} must be a valid hostname or IP address"
+        
+        return True, None
     
     # Authentication method preference
     AUTH_METHOD: str = os.getenv('AUTH_METHOD', 'password')
@@ -88,18 +131,20 @@ class Config:
         """
         errors = []
         
-        # Check production Panorama
-        if not cls.PROD_HOST:
-            errors.append("PROD_PANORAMA_HOST is required")
+        # Check production Panorama hostname
+        is_valid, error_msg = cls.validate_hostname(cls.PROD_HOST, "PROD_PANORAMA_HOST")
+        if not is_valid:
+            errors.append(error_msg or "PROD_PANORAMA_HOST is required")
         
         try:
             cls.get_prod_auth()
         except ValueError as e:
             errors.append(str(e))
         
-        # Check lab Panorama
-        if not cls.LAB_HOST:
-            errors.append("LAB_PANORAMA_HOST is required")
+        # Check lab Panorama hostname
+        is_valid, error_msg = cls.validate_hostname(cls.LAB_HOST, "LAB_PANORAMA_HOST")
+        if not is_valid:
+            errors.append(error_msg or "LAB_PANORAMA_HOST is required")
         
         try:
             cls.get_lab_auth()

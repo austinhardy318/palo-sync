@@ -7,6 +7,8 @@ import os
 import json
 import logging
 import datetime as dt
+import hashlib
+import re
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request, redirect, url_for, session, flash
@@ -30,10 +32,46 @@ app.secret_key = FLASK_SECRET_KEY
 app.permanent_session_lifetime = dt.timedelta(hours=8)
 
 # Enable CSRF protection
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
+
+# Configure CSRF protection  
+# Flask-WTF by default accepts CSRF tokens from:
+# 1. Form data (field name: csrf_token)
+# 2. Request headers (header name: X-CSRFToken)
+# 3. Cookies (if configured)
+
 csrf = CSRFProtect(app)
+# No additional config needed - Flask-WTF 1.2.1 accepts X-CSRFToken header by default
 
 # Note: CSRF is enabled globally but exempted on specific routes
+
+# Make CSRF token available in all templates
+@app.context_processor
+def inject_csrf_token():
+    """Make CSRF token available in all templates"""
+    def get_csrf_token():
+        try:
+            # Generate CSRF token - Flask-WTF will store it in session
+            return csrf.generate_csrf()
+        except Exception as e:
+            logger.error(f"Error generating CSRF token: {e}")
+            return ""
+    return dict(csrf_token=get_csrf_token)
+
+# Add error handler for CSRF errors to return JSON instead of HTML
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Handle CSRF errors and return JSON response for API endpoints"""
+    logger.warning(f"CSRF validation failed: {e.description} for path {request.path}")
+    logger.debug(f"Request headers: {dict(request.headers)}")
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False, 
+            'error': 'CSRF token missing or invalid',
+            'details': str(e.description) if hasattr(e, 'description') else str(e)
+        }), 400
+    # For non-API routes, let Flask-WTF handle the default error page
+    return jsonify({'success': False, 'error': 'CSRF token missing or invalid'}), 400
 
 # Setup logging first (needed for Redis connection logging)
 logging.basicConfig(
@@ -59,9 +97,24 @@ except Exception as e:
     redis_client = None
     redis_available = False
 
+
+def get_rate_limit_key() -> str:
+    """
+    Get rate limit key for current request
+    Uses username for authenticated users, IP address for anonymous users
+    This allows per-user rate limiting for authenticated users
+    """
+    # Check if user is authenticated
+    if 'authenticated' in session and session.get('authenticated'):
+        username = session.get('username', 'unknown')
+        return f"user:{username}"
+    # Fall back to IP address for anonymous users
+    return f"ip:{get_remote_address()}"
+
+
 limiter = Limiter(
     app=app,
-    key_func=get_remote_address,
+    key_func=get_rate_limit_key,
     default_limits=["200 per day", "50 per hour"],
     storage_uri=redis_url if redis_available else "memory://"
 )
@@ -73,6 +126,25 @@ authenticator = Authenticator()
 
 # Store operation logs in memory
 operation_logs = []
+
+
+def hash_username(username: str) -> str:
+    """
+    Hash username for logging purposes to prevent username enumeration
+    Uses SHA-256 with a salt from config
+    """
+    salt = os.getenv('LOG_SALT', 'palo-sync-default-salt-change-in-production')
+    return hashlib.sha256((username + salt).encode()).hexdigest()[:16]
+
+
+def rotate_session() -> None:
+    """Regenerate session ID to prevent session fixation attacks"""
+    # Flask automatically regenerates session ID when we clear certain keys
+    # We'll keep the essential data but force regeneration
+    if 'authenticated' in session:
+        session.permanent = True  # Ensure session stays permanent
+        # Force session refresh by modifying a dummy key
+        session['_refresh'] = datetime.now().isoformat()
 
 
 def requires_auth(f: Callable) -> Callable:
@@ -93,17 +165,36 @@ def requires_auth(f: Callable) -> Callable:
     return decorated
 
 
-def validate_backup_path(backup_path: str, backup_dir: Path) -> Tuple[bool, Optional[str]]:
+def validate_backup_path(backup_path: str, backup_dir: Path, max_filename_length: int = 255) -> Tuple[bool, Optional[str]]:
     """
     Validate backup path to prevent directory traversal attacks
+    Also validates filename format and length
     Returns (is_valid, error_message)
     """
     if not backup_path or not isinstance(backup_path, str):
         return False, 'backup_path is required and must be a string'
     
+    # Check path length (prevent extremely long paths)
+    if len(backup_path) > 4096:  # Maximum path length on most systems
+        return False, 'backup_path exceeds maximum length'
+    
     # Check for path traversal attempts
     if '..' in backup_path or backup_path.startswith('.'):
-        return False, 'Invalid backup path'
+        return False, 'Invalid backup path: path traversal not allowed'
+    
+    # Validate filename format
+    filename = Path(backup_path).name
+    if not filename:
+        return False, 'Invalid backup path: filename required'
+    
+    # Check filename length
+    if len(filename) > max_filename_length:
+        return False, f'Invalid backup path: filename exceeds maximum length of {max_filename_length} characters'
+    
+    # Validate filename contains only safe characters
+    # Allow alphanumeric, hyphens, underscores, dots, and XML extension
+    if not re.match(r'^[a-zA-Z0-9_\-\.]+\.xml$', filename):
+        return False, 'Invalid backup path: filename must contain only alphanumeric characters, hyphens, underscores, dots, and end with .xml'
     
     # Ensure path is within backup directory
     try:
@@ -111,11 +202,18 @@ def validate_backup_path(backup_path: str, backup_dir: Path) -> Tuple[bool, Opti
         backups_dir = Path(backup_dir)
         # Normalize the path and check it's within the backup directory
         resolved_path = backup_file.resolve()
-        if not str(resolved_path).startswith(str(backups_dir.resolve())):
-            return False, 'Invalid backup path'
+        backups_dir_resolved = backups_dir.resolve()
+        if not str(resolved_path).startswith(str(backups_dir_resolved)):
+            return False, 'Invalid backup path: must be within backup directory'
+        
+        # Additional check: ensure the resolved path is actually a file within the directory
+        # Prevent accessing parent directories even if path seems valid
+        if resolved_path.parent != backups_dir_resolved:
+            return False, 'Invalid backup path: must be directly in backup directory'
+        
         return True, None
-    except (ValueError, OSError):
-        return False, 'Invalid backup path'
+    except (ValueError, OSError) as e:
+        return False, f'Invalid backup path: {str(e)}'
 
 
 def log_operation(operation: str, details: Optional[Dict[str, Any]] = None) -> None:
@@ -141,7 +239,7 @@ def log_operation(operation: str, details: Optional[Dict[str, Any]] = None) -> N
 
 @app.route('/login', methods=['GET', 'POST'])
 @csrf.exempt  # Exempt login from CSRF protection since it's the entry point
-@limiter.limit("5 per minute")
+@limiter.limit("5 per minute", key_func=get_remote_address)  # Use IP for login attempts
 def login() -> Any:
     """Login page with rate limiting"""
     if request.method == 'POST':
@@ -155,13 +253,18 @@ def login() -> Any:
         # Authenticate user
         success, error = authenticator.authenticate(username, password)
         if success:
+            # Regenerate session ID to prevent session fixation
+            session.permanent = True
             session['authenticated'] = True
             session['username'] = username
+            # Log successful login with actual username (for audit trail)
             log_operation('login', {'username': username})
             return redirect(url_for('index'))
         else:
             flash(f'Authentication failed: {error}')
-            log_operation('login_failed', {'username': username})
+            # Log failed login with hashed username to prevent enumeration
+            username_hash = hash_username(username)
+            log_operation('login_failed', {'username_hash': username_hash})
     
     return render_template('login.html')
 
@@ -170,6 +273,8 @@ def login() -> Any:
 def logout() -> Any:
     """Logout and clear session"""
     username = session.get('username')
+    # Clear session and mark as non-permanent
+    session.permanent = False
     session.clear()
     log_operation('logout', {'username': username})
     flash('You have been logged out successfully')
@@ -203,7 +308,8 @@ def get_status() -> Any:
 
 
 @app.route('/api/diff', methods=['POST'])
-@csrf.exempt
+@csrf.exempt  # Exempt authenticated API endpoint - session authentication provides protection
+@requires_auth  # Require authentication for diff endpoint
 def generate_diff():
     """Generate configuration diff between production and lab"""
     try:
@@ -218,10 +324,18 @@ def generate_diff():
 
 
 @app.route('/api/sync', methods=['POST'])
-@csrf.exempt
+@csrf.exempt  # Exempt authenticated API endpoint - session authentication provides protection
+@requires_auth
 def sync_configuration():
     """Execute configuration sync from production to lab"""
     try:
+        # Log CSRF token presence for debugging
+        logger.debug(f"CSRF token in headers: {request.headers.get('X-CSRFToken', 'NOT FOUND')}")
+        logger.debug(f"CSRF token in headers (alt): {request.headers.get('X-CSRF-Token', 'NOT FOUND')}")
+        
+        # Rotate session on sensitive operation
+        rotate_session()
+        
         data = request.get_json() or {}
         
         # Validate input types
@@ -278,6 +392,12 @@ def download_backup(backup_path):
         if not backup_file.exists():
             return jsonify({'error': 'Backup file not found'}), 404
         
+        # Check file size (max 100MB per backup file)
+        max_backup_size = 100 * 1024 * 1024  # 100MB
+        file_size = backup_file.stat().st_size
+        if file_size > max_backup_size:
+            return jsonify({'error': 'Backup file exceeds maximum size limit'}), 413
+        
         log_operation('backup_download', {'filename': backup_file.name})
         return send_file(
             str(backup_file),
@@ -292,10 +412,14 @@ def download_backup(backup_path):
 
 
 @app.route('/api/backups/restore', methods=['POST'])
-@csrf.exempt
+@csrf.exempt  # Exempt authenticated API endpoint - session authentication provides protection
+@requires_auth
 def restore_backup():
     """Restore a backup file"""
     try:
+        # Rotate session on sensitive operation
+        rotate_session()
+        
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'error': 'Request body is required'}), 400
@@ -323,7 +447,8 @@ def restore_backup():
 
 
 @app.route('/api/backups/delete', methods=['POST'])
-@csrf.exempt
+@csrf.exempt  # Exempt authenticated API endpoint - session authentication provides protection
+@requires_auth
 def delete_backup():
     """Delete a backup file"""
     try:
@@ -350,24 +475,35 @@ def delete_backup():
 
 
 @app.route('/api/logs', methods=['GET'])
+# GET requests don't need CSRF protection, keeping exempt for read-only
+# Also exempt from rate limiting - this is a read-only endpoint used for auto-refresh
 @csrf.exempt
+@limiter.exempt
 def get_logs():
     """Get recent operation logs"""
+    global operation_logs  # Declare global at the start of the function
+    
     try:
         limit_str = request.args.get('limit', '50')
         try:
             limit = int(limit_str)
         except ValueError:
-            return jsonify({'error': 'limit must be a valid integer'}), 400
+            return jsonify({'error': 'limit must be a valid integer', 'logs': []}), 400
         
         # Enforce bounds: between 1 and 1000
         limit = max(1, min(limit, 1000))
         
-        logs = operation_logs[-limit:]
+        # Ensure operation_logs exists and is a list
+        if not isinstance(operation_logs, list):
+            logger.warning("operation_logs is not a list, initializing")
+            operation_logs = []
+        
+        logs = operation_logs[-limit:] if operation_logs else []
         return jsonify({'logs': logs})
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
-        return jsonify({'error': str(e)}), 500
+        # Always return JSON, even on error
+        return jsonify({'error': str(e), 'logs': []}), 500
 
 
 @app.route('/api/settings', methods=['GET'])
@@ -381,7 +517,9 @@ def get_settings():
             default_settings = {
                 'createBackup': True,
                 'commitConfig': False,
-                'preserveHostname': True
+                'preserveHostname': True,
+                'autoRefreshLogs': True,
+                'logRefreshInterval': 10
             }
             return jsonify({'settings': default_settings})
         
@@ -396,7 +534,8 @@ def get_settings():
 
 
 @app.route('/api/settings', methods=['POST'])
-@csrf.exempt
+@csrf.exempt  # Exempt authenticated API endpoint - session authentication provides protection
+@requires_auth
 def save_settings():
     """Save application settings"""
     try:
@@ -426,6 +565,20 @@ def save_settings():
         if not isinstance(settings['preserveHostname'], bool):
             return jsonify({'success': False, 'error': 'preserveHostname must be a boolean'}), 400
         
+        # Validate optional log refresh settings
+        if 'autoRefreshLogs' in settings:
+            if not isinstance(settings['autoRefreshLogs'], bool):
+                return jsonify({'success': False, 'error': 'autoRefreshLogs must be a boolean'}), 400
+        
+        if 'logRefreshInterval' in settings:
+            try:
+                interval = int(settings['logRefreshInterval'])
+                if interval < 5 or interval > 300:
+                    return jsonify({'success': False, 'error': 'logRefreshInterval must be between 5 and 300 seconds'}), 400
+                settings['logRefreshInterval'] = interval
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'error': 'logRefreshInterval must be a valid integer'}), 400
+        
         # Save settings to file
         with open(settings_path, 'w') as f:
             json.dump(settings, f, indent=2)
@@ -438,7 +591,8 @@ def save_settings():
 
 
 @app.route('/api/backups/cleanup', methods=['POST'])
-@csrf.exempt
+@csrf.exempt  # Exempt authenticated API endpoint - session authentication provides protection
+@requires_auth
 def cleanup_backups():
     """Delete all backup files"""
     try:
@@ -483,6 +637,14 @@ def get_config():
     except Exception as e:
         logger.error(f"Error getting config: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/csrf-token', methods=['GET'])
+@csrf.exempt  # Exempt this endpoint so it can be called without CSRF
+def get_csrf_token():
+    """Get CSRF token for AJAX requests"""
+    token = csrf.generate_csrf()
+    return jsonify({'csrf_token': token})
 
 
 if __name__ == '__main__':

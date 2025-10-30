@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Palo-Sync</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- DOMPurify for XSS protection -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <!-- CSRF Token embedded in page for JavaScript -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
     <!-- Navigation Bar -->
@@ -93,7 +97,13 @@
         <!-- Activity Log Section -->
         <section id="logs-section" class="card">
             <h2>Activity Log</h2>
-            <button id="refresh-logs" class="btn btn-secondary">Refresh Logs</button>
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+                <button id="refresh-logs" class="btn btn-secondary">Refresh Logs</button>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="auto-refresh-logs">
+                    <span>Auto-refresh logs</span>
+                </label>
+            </div>
             <div id="logs" class="logs"></div>
         </section>
     </div>
