@@ -5,7 +5,7 @@
 
 NMS-Sync is a Dockerized web application for synchronizing network management system (NMS) configurations from production to lab environments. **Currently supports Palo Alto Networks Panorama**, with plans to support additional NMS platforms in the future.
 
-> **⚠️ Disclaimer**: "Panorama" and "Palo Alto Networks" are trademarks of Palo Alto Networks, Inc. This project is not affiliated with, endorsed by, or sponsored by Palo Alto Networks. NMS-Sync is an independent, open-source project.
+> **Disclaimer**: "Panorama" and "Palo Alto Networks" are trademarks of Palo Alto Networks, Inc. This project is not affiliated with, endorsed by, or sponsored by Palo Alto Networks. NMS-Sync is an independent, open-source project.
 
 ## What It Does
 
@@ -18,14 +18,14 @@ NMS-Sync provides a safe and automated way to:
 
 ## Features
 
-- 🔄 **One-Way Sync**: Safely synchronize production configuration to lab environment
-- 🔍 **Diff Checking**: Preview all changes before synchronizing
-- 💾 **Automatic Backups**: Creates timestamped backups before sync operations
-- 🏷️ **Hostname Preservation**: Keeps lab hostname unchanged during sync
-- 🔐 **Flexible Authentication**: Supports API keys or username/password for Panorama, plus RADIUS for web access
-- 🌐 **Web Interface**: Modern, user-friendly GUI for all operations
-- 📊 **Activity Logging**: Track all operations with user attribution
-- ⚙️ **Configurable Settings**: Customize timeout, timezone, and diff ignore rules
+- **One-Way Sync**: Safely synchronize production configuration to lab environment
+- **Diff Checking**: Preview all changes before synchronizing
+- **Automatic Backups**: Creates timestamped backups before sync operations
+- **Hostname Preservation**: Keeps lab hostname unchanged during sync
+- **Flexible Authentication**: Supports API keys or username/password for Panorama, plus RADIUS for web access
+- **Web Interface**: Modern, user-friendly GUI for all operations
+- **Activity Logging**: Track all operations with user attribution
+- **Configurable Settings**: Customize timeout, timezone, and diff ignore rules
 
 ## Quick Start
 
@@ -131,18 +131,6 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
    - Click "Execute Sync" to synchronize production configuration to lab
 4. **Monitor**: Watch the activity log for operation details
 
-### Management Script
-
-NMS-Sync includes a convenient management script (`manage.sh`):
-
-```bash
-./manage.sh start     # Start the application
-./manage.sh stop      # Stop the application
-./manage.sh restart   # Restart the application
-./manage.sh logs      # View application logs
-./manage.sh status    # Check container status
-./manage.sh shell     # Open shell in container
-```
 
 ## Configuration
 
@@ -191,17 +179,13 @@ Full API documentation: See `/api/status`, `/api/diff`, `/api/sync`, `/api/backu
 ### Common Issues
 
 - **Cannot connect to Panorama**: Verify hostnames, credentials, and network connectivity
-- **Sync fails**: Check logs with `./manage.sh logs` or verify lab Panorama has commit privileges
+- **Sync fails**: Check logs with `docker compose logs -f nms-sync` or verify lab Panorama has commit privileges
 - **Timeout errors**: Adjust timeout settings in the Settings page
 - **SSL errors**: Set `SSL_VERIFY=false` in `.env` for lab environments
 
 ### Viewing Logs
 
 ```bash
-# Using management script
-./manage.sh logs
-
-# Using docker compose
 docker compose logs -f nms-sync
 ```
 
@@ -228,7 +212,7 @@ This project is licensed under the GNU General Public License v3.0. See the [LIC
 
 ## Disclaimer
 
-**⚠️ Important**: This tool modifies Panorama configurations. Always test in a lab environment first and ensure you have proper backups before using in production. NMS-Sync software is provided "as is" without warranty of any kind.
+**Important**: This tool modifies Panorama configurations. Always test in a lab environment first and ensure you have proper backups before using in production. NMS-Sync software is provided "as is" without warranty of any kind.
 
 **Trademark Notice**: "Panorama" and "Palo Alto Networks" are trademarks of Palo Alto Networks, Inc. This project is not affiliated with, endorsed by, or sponsored by Palo Alto Networks.
 
