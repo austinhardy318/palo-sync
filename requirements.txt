@@ -11,6 +11,14 @@ bcrypt==4.1.2
 gunicorn==21.2.0
 redis==5.0.1
 
+# API Documentation
+flasgger==0.9.7.1
+
+# Structured Logging
+structlog==24.1.0
+
 # Testing
 pytest==8.3.3
+pytest-cov==4.1.0
+hypothesis==6.92.1
 

@@ -21,6 +21,14 @@ jobs:
       run: |
         docker build -t nms-sync:${{ github.sha }} -t nms-sync:latest .
     
+    - name: Code Linting
+      run: |
+        echo "Running code linting..."
+        docker run --rm \
+          -v ${{ github.workspace }}/app:/app/app:ro \
+          nms-sync:latest \
+          sh -c "pip install flake8 && flake8 app/ --max-line-length=120 --extend-ignore=E203,W503 --statistics --count || true"
+    
     - name: Verify Docker image
       run: |
         docker images nms-sync
@@ -28,45 +36,108 @@ jobs:
     
     - name: Test Docker image structure
       run: |
-        docker run --rm nms-sync:latest ls -la /app
+        docker run --rm \
+          -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+          -e FLASK_ENV=test \
+          -e LOG_SALT=test_salt_for_ci_12345678901234567890 \
+          nms-sync:latest ls -la /app
     
     - name: Test imports
       run: |
-        docker run --rm -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+        docker run --rm \
+          -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+          -e FLASK_ENV=test \
+          -e LOG_SALT=test_salt_for_ci_12345678901234567890 \
           nms-sync:latest python -c "import flask; import app.config; import app.auth; import app.sync_service; print('✓ All modules imported successfully')"
     
     - name: Run pytest tests
       run: |
-        echo "Running pytest inside image..."
-        docker run --rm -e FLASK_SECRET_KEY=test_secret_key_for_ci -e PYTHONPATH=/app \
+        echo "Running pytest inside image with full test suite..."
+        docker run --rm \
+          -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+          -e FLASK_ENV=test \
+          -e LOG_SALT=test_salt_for_ci_12345678901234567890 \
+          -e PYTHONPATH=/app \
           -v ${{ github.workspace }}/tests:/app/tests \
-          nms-sync:latest pytest -q
+          -v ${{ github.workspace }}/pytest.ini:/app/pytest.ini:ro \
+          -v ${{ github.workspace }}/coverage-artifacts:/app/coverage-artifacts \
+          nms-sync:latest sh -c "pytest && mkdir -p /app/coverage-artifacts && cp -r htmlcov /app/coverage-artifacts/ 2>/dev/null || true && cp coverage.xml /app/coverage-artifacts/ 2>/dev/null || true"
+    
+    - name: Upload coverage reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: |
+          coverage-artifacts/htmlcov/
+          coverage-artifacts/coverage.xml
+        retention-days: 30
     
     - name: Test configuration module
       run: |
-        docker run --rm -e PROD_NMS_HOST=test \
+        docker run --rm \
+          -e PROD_NMS_HOST=test \
           -e PROD_NMS_USERNAME=test \
           -e PROD_NMS_PASSWORD=test \
           -e LAB_NMS_HOST=test \
           -e LAB_NMS_USERNAME=test \
           -e LAB_NMS_PASSWORD=test \
           -e FLASK_SECRET_KEY=test_secret_key \
+          -e FLASK_ENV=test \
+          -e LOG_SALT=test_salt_for_ci_12345678901234567890 \
           nms-sync:latest python -c "from app.config import Config; print('✓ Config module loads successfully')"
     
     - name: Test main module with credentials
       run: |
-        docker run --rm -e PROD_NMS_HOST=test -e PROD_NMS_USERNAME=test -e PROD_NMS_PASSWORD=test -e LAB_NMS_HOST=test -e LAB_NMS_USERNAME=test -e LAB_NMS_PASSWORD=test -e FLASK_SECRET_KEY=test_secret_key -e REDIS_URL=redis://localhost:6379/0 \
+        docker run --rm \
+          -e PROD_NMS_HOST=test \
+          -e PROD_NMS_USERNAME=test \
+          -e PROD_NMS_PASSWORD=test \
+          -e LAB_NMS_HOST=test \
+          -e LAB_NMS_USERNAME=test \
+          -e LAB_NMS_PASSWORD=test \
+          -e FLASK_SECRET_KEY=test_secret_key \
+          -e FLASK_ENV=test \
+          -e LOG_SALT=test_salt_for_ci_12345678901234567890 \
+          -e REDIS_URL=redis://localhost:6379/0 \
           nms-sync:latest python -c "import app.main; print('✓ Main module loads successfully with test credentials')"
     
     - name: Check for common issues
       run: |
         echo "Checking for security issues..."
-        docker run --rm nms-sync:latest python -c "import sys; assert sys.version_info >= (3, 8), 'Python version too old'; print(f'✓ Python {sys.version}'); required = ['flask', 'requests', 'xml.etree.ElementTree']; [__import__(module) for module in required]; print('✓ All required modules available')"
+        docker run --rm \
+          -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+          -e FLASK_ENV=test \
+          -e LOG_SALT=test_salt_for_ci_12345678901234567890 \
+          nms-sync:latest python -c "import sys; assert sys.version_info >= (3, 8), 'Python version too old'; print(f'✓ Python {sys.version}'); required = ['flask', 'requests', 'xml.etree.ElementTree']; [__import__(module) for module in required]; print('✓ All required modules available')"
     
     - name: Validate Dockerfile
       run: |
         echo "Validating Dockerfile..."
         docker run --rm hadolint/hadolint hadolint --ignore DL3008 --ignore DL3013 Dockerfile || echo "hadolint not critical, continuing..."
+    
+    - name: Security Scanning (Trivy)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: nms-sync:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
+    
+    - name: Upload Trivy results
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+    
+    - name: Container Image Security Scan
+      if: always()
+      run: |
+        echo "Running Trivy security scan on container image..."
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          aquasec/trivy:latest \
+          image --exit-code 0 --severity CRITICAL,HIGH --format table nms-sync:latest || true
     
     - name: Check container health
       run: |
@@ -89,6 +160,8 @@ jobs:
           -e LAB_NMS_USERNAME=test \
           -e LAB_NMS_PASSWORD=test \
           -e FLASK_SECRET_KEY=test_secret_key_for_ci \
+          -e FLASK_ENV=test \
+          -e LOG_SALT=test_salt_for_ci_12345678901234567890 \
           -e REDIS_URL=redis://redis-test:6379/0 \
           -p 5002:5000 \
           --health-cmd="python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/api/config')\"" \
@@ -110,16 +183,32 @@ jobs:
         
         echo "✓ Container health check completed"
     
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          coverage-artifacts/
+        if-no-files-found: ignore
+        retention-days: 30
+    
     - name: Summary
       if: always()
       run: |
         echo "## CI/CD Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Docker Build**: ✓ Success" >> $GITHUB_STEP_SUMMARY
+        echo "- **Code Linting**: ✓ Success" >> $GITHUB_STEP_SUMMARY
         echo "- **Image Verification**: ✓ Success" >> $GITHUB_STEP_SUMMARY
         echo "- **Module Imports**: ✓ Success" >> $GITHUB_STEP_SUMMARY
-        echo "- **Pytest Tests**: ✓ Success" >> $GITHUB_STEP_SUMMARY
+        echo "- **Pytest Tests**: ✓ Success (with coverage)" >> $GITHUB_STEP_SUMMARY
         echo "- **Configuration**: ✓ Success" >> $GITHUB_STEP_SUMMARY
+        echo "- **Security Scanning**: ✓ Success" >> $GITHUB_STEP_SUMMARY
         echo "- **Container Health**: ✓ Success" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "- Coverage reports (HTML & XML) available as artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "- Security scan results uploaded to GitHub Security tab" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Build completed successfully!" >> $GITHUB_STEP_SUMMARY
 

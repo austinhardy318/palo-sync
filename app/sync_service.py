@@ -24,6 +24,7 @@ from .config import Config
 from .http_client import HttpClient, get_ssl_verify
 from .diff_service import DiffService
 from .config_service import ConfigService
+from .exceptions import PanoramaConnectionError, PanoramaAPIError, BackupError, NotFoundError
 
 # Conditionally disable SSL warnings based on configuration
 if not Config.SSL_VERIFY:
@@ -48,6 +49,7 @@ class SyncService:
     _api_key_cache: Dict[str, Dict[str, Any]] = {}
     _cache_lock = Lock()
     _cache_ttl_hours = int(os.getenv('API_KEY_CACHE_TTL_HOURS', '1'))
+    _cache_max_size = int(os.getenv('API_KEY_CACHE_MAX_SIZE', '100'))  # Maximum number of cached keys
 
     def __init__(self):
         self.prod_auth = Config.get_prod_auth()
@@ -76,18 +78,44 @@ class SyncService:
             conn = self.get_panorama_connection(Config.PROD_HOST, self.prod_auth)
             results['production']['connected'] = True
             results['production']['version'] = conn.refresh_system_info()
-            logger.info(f"Successfully connected to production NMS: {Config.PROD_HOST}")
+            logger.info(
+                f"Successfully connected to production NMS (host: {Config.PROD_HOST}, version: {results['production']['version']})"
+            )
+        except PanoramaConnectionError as e:
+            # Don't re-raise - we want to test both connections and return error
+            error_msg = str(e)
+            results['production']['error'] = error_msg
+            logger.error(
+                f"Failed to connect to production NMS: {error_msg} (host: {Config.PROD_HOST}, type: {type(e).__name__})"
+            )
         except Exception as e:
-            results['production']['error'] = str(e)
-            logger.error(f"Failed to connect to production NMS: {e}")
+            error_msg = str(e)
+            results['production']['error'] = error_msg
+            logger.error(
+                f"Failed to connect to production NMS: {error_msg} (host: {Config.PROD_HOST}, type: {type(e).__name__})"
+            )
+            # Don't raise here - we want to test both connections
         try:
             conn = self.get_panorama_connection(Config.LAB_HOST, self.lab_auth)
             results['lab']['connected'] = True
             results['lab']['version'] = conn.refresh_system_info()
-            logger.info(f"Successfully connected to lab NMS: {Config.LAB_HOST}")
+            logger.info(
+                f"Successfully connected to lab NMS (host: {Config.LAB_HOST}, version: {results['lab']['version']})"
+            )
+        except PanoramaConnectionError as e:
+            # Don't re-raise - we want to test both connections and return error
+            error_msg = str(e)
+            results['lab']['error'] = error_msg
+            logger.error(
+                f"Failed to connect to lab NMS: {error_msg} (host: {Config.LAB_HOST}, type: {type(e).__name__})"
+            )
         except Exception as e:
-            results['lab']['error'] = str(e)
-            logger.error(f"Failed to connect to lab NMS: {e}")
+            error_msg = str(e)
+            results['lab']['error'] = error_msg
+            logger.error(
+                f"Failed to connect to lab NMS: {error_msg} (host: {Config.LAB_HOST}, type: {type(e).__name__})"
+            )
+            # Don't raise here - we want to test both connections
         return results
 
     def _get_api_key(self, host: str, auth: Dict[str, Any]) -> str:
@@ -110,30 +138,50 @@ class SyncService:
             try:
                 root = ET.fromstring(response.text)
             except ET.ParseError as e:
-                raise Exception(f"Invalid XML response when getting API key: {e}")
+                raise PanoramaAPIError(f"Invalid XML response when getting API key: {str(e)}", api_response=response.text[:500])
             if root.attrib.get('status') == 'success':
                 key_elem = root.find('.//key')
                 if key_elem is not None and key_elem.text:
                     api_key = key_elem.text
                     with self._cache_lock:
                         expires = datetime.now() + timedelta(hours=self._cache_ttl_hours)
+                        # Check cache size and evict oldest entries if needed
+                        if len(self._api_key_cache) >= self._cache_max_size:
+                            # Remove expired entries first
+                            now = datetime.now()
+                            expired_keys = [
+                                k for k, v in self._api_key_cache.items()
+                                if v.get('expires', datetime.min) <= now
+                            ]
+                            for k in expired_keys:
+                                del self._api_key_cache[k]
+                            
+                            # If still at max size, remove oldest entry (FIFO)
+                            if len(self._api_key_cache) >= self._cache_max_size:
+                                oldest_key = next(iter(self._api_key_cache))
+                                del self._api_key_cache[oldest_key]
+                                logger.debug(f"Evicted oldest API key cache entry: {oldest_key}")
+                        
                         self._api_key_cache[cache_key] = {'key': api_key, 'expires': expires}
-                        logger.debug(f"Cached API key for {host}, expires at {expires}")
+                        logger.debug(f"Cached API key for {host}, expires at {expires} (cache size: {len(self._api_key_cache)}/{self._cache_max_size})")
                     return api_key
                 else:
-                    raise Exception("API key not found in response")
+                    raise PanoramaAPIError("API key not found in response", api_response=response.text[:500])
             else:
                 error_msg_elem = root.find('.//msg')
                 error_text = error_msg_elem.text if error_msg_elem is not None else 'Unknown error'
-                raise Exception(f"Failed to obtain API key: {error_text}")
+                raise PanoramaAPIError(f"Failed to obtain API key: {error_text}", api_response=response.text[:500])
+        except PanoramaAPIError:
+            # Re-raise custom exceptions
+            raise
         except requests.RequestException as e:
             error_msg = sanitize_error_message(str(e))
             logger.error(f"Request error getting API key: {error_msg}")
-            raise Exception(f"Failed to get API key: {error_msg}")
+            raise PanoramaConnectionError(host, message=f"Failed to connect to Panorama: {error_msg}")
         except (ET.ParseError, IOError, OSError) as e:
             error_msg = sanitize_error_message(str(e))
             logger.error(f"Error getting API key: {error_msg}")
-            raise
+            raise PanoramaConnectionError(host, message=f"Failed to get API key: {error_msg}")
 
     @classmethod
     def clear_api_key_cache(cls, host: Optional[str] = None) -> None:
@@ -240,7 +288,7 @@ class SyncService:
                     result[tag] = child_dict
         return result
 
-    def create_backup(self, env: str) -> Optional[str]:
+    def create_backup(self, env: str) -> str:
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_filename = f"{env}_backup_{timestamp}.xml"
@@ -256,9 +304,12 @@ class SyncService:
             self.config.stream_export_to_file(host, api_key, backup_path)
             logger.info(f"Created backup: {backup_path}")
             return str(backup_path)
+        except (PanoramaConnectionError, PanoramaAPIError):
+            # Re-raise connection/API errors
+            raise
         except Exception as e:
             logger.error(f"Failed to create backup: {e}")
-            return None
+            raise BackupError(f"Failed to create backup: {str(e)}", operation='create', details={'env': env})
 
     def list_backups(self) -> List[Dict[str, Any]]:
         """List all available backup files in backup directory."""
@@ -303,6 +354,15 @@ class SyncService:
             job = self.import_config(Config.LAB_HOST, self.lab_auth, prod_config_xml, commit=commit)
             result['success'] = True
             result['commit_job_id'] = job
+            
+            # Invalidate diff cache since lab config has changed
+            try:
+                from .diff_service import DiffService
+                DiffService.clear_cache()
+                logger.debug("Cleared diff cache after sync")
+            except Exception as e:
+                logger.warning(f"Failed to clear diff cache: {e}")
+            
             logger.info(f"Sync completed successfully: {sync_id}")
         except Exception as e:
             result['error'] = str(e)
@@ -317,15 +377,26 @@ class SyncService:
             'error': None
         }
         try:
+            # Check if backup file exists
+            backup_file = Path(backup_path)
+            if not backup_file.exists():
+                raise NotFoundError('backup', identifier=backup_path)
+            
             with open(backup_path, 'r') as f:
                 backup_config = f.read()
             job = self.import_config(Config.LAB_HOST, self.lab_auth, backup_config, commit=commit)
             result['success'] = True
             result['commit_job_id'] = job
             logger.info(f"Backup restored successfully: {backup_path}")
+        except (NotFoundError, PanoramaConnectionError, PanoramaAPIError):
+            # Re-raise custom exceptions
+            raise
+        except (OSError, IOError) as e:
+            logger.error(f"IO error restoring backup: {e}")
+            raise BackupError(f"Failed to read backup file: {str(e)}", operation='restore')
         except Exception as e:
-            result['error'] = str(e)
             logger.error(f"Restore failed: {e}")
+            raise BackupError(f"Failed to restore backup: {str(e)}", operation='restore')
         return result
 
     def delete_backup(self, backup_path: str) -> Dict[str, Any]:

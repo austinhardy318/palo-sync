@@ -1,20 +1,24 @@
-import json
 import logging
-from pathlib import Path
-from typing import Union, Optional, Dict, Any
+from typing import Union, Any
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from .config import Config
+from .settings_manager import get_settings_manager
 
 
 logger = logging.getLogger(__name__)
 
 
 def get_ssl_verify() -> Union[bool, str]:
-    """Resolve SSL verification setting from Config."""
+    """Resolve SSL verification setting from Config.
+    
+    Note: Import Config inside function to ensure we always get the latest
+    Config class, even if app.config was reloaded.
+    """
+    from .config import Config  # Import inside function to handle module reloads
+    
     if not Config.SSL_VERIFY:
         return False
     return Config.SSL_CERT_PATH if Config.SSL_CERT_PATH else True
@@ -40,17 +44,15 @@ class HttpClient:
         self._session.mount('https://', adapter)
 
     def _get_timeout(self) -> int:
-        """Read timeout from settings file if present."""
+        """Read timeout from cached settings."""
         try:
-            settings_path = Path('/app/settings/user_settings.json')
-            if settings_path.exists():
-                with open(settings_path, 'r') as f:
-                    data: Dict[str, Any] = json.load(f)
-                    rt = int(data.get('requestTimeout', self._default_timeout))
-                    if 5 <= rt <= 300:
-                        return rt
-        except (OSError, IOError, json.JSONDecodeError, ValueError, KeyError):
-            # Use default on any error (file not found, invalid JSON, invalid value, etc.)
+            settings_manager = get_settings_manager()
+            rt = settings_manager.get_setting('requestTimeout', self._default_timeout)
+            rt = int(rt)
+            if 5 <= rt <= 300:
+                return rt
+        except (ValueError, TypeError):
+            # Invalid value, use default
             pass
         return self._default_timeout
 

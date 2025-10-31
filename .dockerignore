@@ -10,13 +10,19 @@
 # Documentation (not needed in container)
 documentation/
 dev-docs/
+docs/
 *.md
 !README.md
+
+# Development tools and CI/CD
+.github/
+scripts/
 
 # IDE files
 .vscode/
 .idea/
 .history/
+.cursor/
 *.swp
 *.swo
 *~
@@ -37,6 +43,15 @@ venv/
 env/
 ENV/
 
+# Testing and coverage (not needed in container)
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+*.cover
+pytest.ini
+
 # Docker files
 docker-compose.yml
 Dockerfile
@@ -50,6 +65,7 @@ settings/
 # Management scripts
 manage.sh
 *.sh
+!entrypoint.sh
 
 # Test files
 test/
@@ -66,4 +82,7 @@ tests/
 # Session/cookie files
 cookiejar
 *.cookiejar
+
+# Temporary/development files
+status.md
 

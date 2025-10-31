@@ -1,4 +1,9 @@
+"""
+Tests for authentication protection on API endpoints
+"""
+
 def test_unauthorized_diff_and_sync_when_auth_required(client, monkeypatch):
+    """Test that diff and sync endpoints require authentication"""
     from app.main import Config
     # Force GUI auth
     monkeypatch.setattr(Config, 'GUI_USERNAME', 'admin', raising=False)
@@ -14,6 +19,7 @@ def test_unauthorized_diff_and_sync_when_auth_required(client, monkeypatch):
 
 
 def test_unauthorized_create_backup_when_auth_required(client, monkeypatch):
+    """Test that backup creation endpoint requires authentication"""
     from app.main import Config
     monkeypatch.setattr(Config, 'GUI_USERNAME', 'admin', raising=False)
     monkeypatch.setattr(Config, 'GUI_PASSWORD', 'secret', raising=False)

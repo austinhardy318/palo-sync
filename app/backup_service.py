@@ -3,8 +3,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+from .exceptions import BackupError, NotFoundError
 
-logger = logging.getLogger(__name__)
+# Use structured logging if available, fallback to standard logging
+try:
+    from .logging_config import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 
 class BackupService:
@@ -50,14 +56,17 @@ class BackupService:
         try:
             backup_file = Path(backup_path)
             if not str(backup_file.resolve()).startswith(str(self.backup_dir.resolve())):
-                return {'success': False, 'error': 'Invalid backup path'}
+                raise BackupError('Invalid backup path', operation='delete')
             if not backup_file.exists():
-                return {'success': False, 'error': 'Backup file not found'}
+                raise NotFoundError('backup', identifier=backup_path)
             backup_file.unlink()
             logger.info(f"Deleted backup: {backup_file}")
             return {'success': True, 'message': f'Backup {backup_file.name} deleted successfully'}
+        except (NotFoundError, BackupError):
+            # Re-raise custom exceptions
+            raise
         except (OSError, IOError) as e:
             logger.error(f"Error deleting backup: {e}")
-            return {'success': False, 'error': str(e)}
+            raise BackupError(f'Failed to delete backup: {str(e)}', operation='delete')
 
 

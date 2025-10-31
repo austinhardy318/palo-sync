@@ -176,6 +176,70 @@ curl -X POST http://localhost:5001/api/sync \
 
 Full API documentation: See `/api/status`, `/api/diff`, `/api/sync`, `/api/backups`, `/api/logs`, `/api/settings`
 
+## Testing
+
+### Running Tests
+
+The project includes comprehensive test coverage including unit tests, integration tests, and property-based tests.
+
+#### Prerequisites
+
+Install test dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+#### Run All Tests
+
+```bash
+pytest
+```
+
+#### Run Tests with Coverage
+
+```bash
+pytest --cov=app --cov-report=html --cov-report=term-missing
+```
+
+This will:
+- Run all tests
+- Generate HTML coverage report in `htmlcov/index.html`
+- Show coverage summary in terminal
+- Fail if coverage is below 60%
+
+#### Run Specific Test Categories
+
+```bash
+# Integration tests
+pytest tests/test_sync_integration.py
+
+# API integration tests
+pytest tests/test_api_integration.py
+
+# Property-based validation tests
+pytest tests/test_validation_properties.py
+
+# Unit tests
+pytest tests/test_settings_caching.py
+pytest tests/test_diff_caching.py
+```
+
+#### Test Structure
+
+- **Unit Tests**: Test individual components (caching, validation, etc.)
+- **Integration Tests**: Test complete workflows with mocked Panorama API responses
+- **Property-Based Tests**: Test validation logic with various edge cases and boundary conditions
+- **API Tests**: Test API endpoints including authentication, error handling, and edge cases
+
+### Test Coverage
+
+Current test coverage targets:
+- **Minimum Coverage**: 60% (enforced by pytest configuration)
+- **Coverage Reports**: HTML, terminal, and XML formats
+- **Branch Coverage**: Enabled for comprehensive coverage analysis
+
+Coverage reports are generated in the `htmlcov/` directory.
+
 ## Troubleshooting
 
 ### Common Issues

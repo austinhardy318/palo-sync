@@ -11,10 +11,21 @@ venv/
 env/
 ENV/
 
+# Testing and coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+*.cover
+*.pyc
+coverage-artifacts/
+
 # IDE
 .vscode/
 .idea/
 .history/
+.cursor/
 *.swp
 *.swo
 *~
@@ -34,6 +45,7 @@ settings/*
 
 # Documentation (internal development docs)
 dev-docs/
+status.md
 
 # OS
 .DS_Store

@@ -1,9 +1,15 @@
 from typing import Optional, Dict, Any
 from flask import jsonify
 
+from .exceptions import NMSException
+
 
 def ok(payload: Dict[str, Any], status: int = 200):
     """Return a plain JSON payload with HTTP status (keeps existing contracts)."""
+    # Ensure success key is present for consistency with API documentation
+    # Create a new dict to avoid mutating the original
+    if 'success' not in payload:
+        payload = {**payload, 'success': True}
     return jsonify(payload), status
 
 
@@ -32,6 +38,11 @@ def fail(
     if extra_top:
         body.update(extra_top)
     return jsonify(body), status
+
+
+def handle_exception(exception: NMSException):
+    """Handle custom NMS exception and return JSON response"""
+    return jsonify(exception.to_dict()), exception.status_code
 
 
 def unauthorized(message: str = "Authentication required"):
