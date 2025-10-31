@@ -25,11 +25,14 @@ os.environ.setdefault("LAB_NMS_PASSWORD", "password123")
 class TestStatusAPI:
     """Test /api/status endpoint"""
     
-    def test_status_endpoint_requires_auth(self, client):
+    def test_status_endpoint_requires_auth(self, client, monkeypatch):
         """Test that status endpoint requires authentication"""
-        # Set up authentication requirement
-        os.environ.setdefault("GUI_USERNAME", "admin")
-        os.environ.setdefault("GUI_PASSWORD", "password")
+        # Set up authentication requirement by patching Config directly
+        # since Config values are read at import time
+        from app.config import Config
+        monkeypatch.setattr(Config, 'GUI_USERNAME', 'admin')
+        monkeypatch.setattr(Config, 'GUI_PASSWORD', 'password')
+        monkeypatch.setattr(Config, 'RADIUS_ENABLED', False)
         
         resp = client.get('/api/status')
         # API endpoint should return 401 (not redirect) when auth required
@@ -65,10 +68,13 @@ class TestStatusAPI:
 class TestDiffAPI:
     """Test /api/diff endpoint"""
     
-    def test_diff_endpoint_requires_auth(self, client):
+    def test_diff_endpoint_requires_auth(self, client, monkeypatch):
         """Test that diff endpoint requires authentication"""
-        os.environ.setdefault("GUI_USERNAME", "admin")
-        os.environ.setdefault("GUI_PASSWORD", "password")
+        # Set up authentication requirement by patching Config directly
+        from app.config import Config
+        monkeypatch.setattr(Config, 'GUI_USERNAME', 'admin')
+        monkeypatch.setattr(Config, 'GUI_PASSWORD', 'password')
+        monkeypatch.setattr(Config, 'RADIUS_ENABLED', False)
         
         resp = client.post('/api/diff')
         # API endpoint should return 401 (not redirect) when auth required
@@ -104,10 +110,13 @@ class TestDiffAPI:
 class TestSyncAPI:
     """Test /api/sync endpoint"""
     
-    def test_sync_endpoint_requires_auth(self, client):
+    def test_sync_endpoint_requires_auth(self, client, monkeypatch):
         """Test that sync endpoint requires authentication"""
-        os.environ.setdefault("GUI_USERNAME", "admin")
-        os.environ.setdefault("GUI_PASSWORD", "password")
+        # Set up authentication requirement by patching Config directly
+        from app.config import Config
+        monkeypatch.setattr(Config, 'GUI_USERNAME', 'admin')
+        monkeypatch.setattr(Config, 'GUI_PASSWORD', 'password')
+        monkeypatch.setattr(Config, 'RADIUS_ENABLED', False)
         
         resp = client.post('/api/sync', json={'create_backup': True})
         # API endpoint should return 401 (not redirect) when auth required
@@ -180,17 +189,23 @@ class TestSyncAPI:
 class TestBackupsAPI:
     """Test /api/backups endpoints"""
     
-    def test_list_backups_requires_auth(self, client):
+    def test_list_backups_requires_auth(self, client, monkeypatch):
         """Test that list backups requires authentication"""
-        os.environ.setdefault("GUI_USERNAME", "admin")
-        os.environ.setdefault("GUI_PASSWORD", "password")
+        # Set up authentication requirement by patching Config directly
+        from app.config import Config
+        monkeypatch.setattr(Config, 'GUI_USERNAME', 'admin')
+        monkeypatch.setattr(Config, 'GUI_PASSWORD', 'password')
+        monkeypatch.setattr(Config, 'RADIUS_ENABLED', False)
         
-        resp = client.get('/api/backups')
-        # API endpoint should return 401 (not redirect) when auth required
-        assert resp.status_code == 401, f"Expected 401 for unauthorized API access, got {resp.status_code}"
-        assert resp.is_json, "API error response must be JSON"
-        data = resp.get_json()
-        assert data.get('success') is False or 'error' in data, "Error response must indicate failure"
+        # Also patch backup_service to return empty list to avoid serialization errors
+        from unittest.mock import patch
+        with patch('app.main.backup_service.list_backups', return_value=[]):
+            resp = client.get('/api/backups')
+            # API endpoint should return 401 (not redirect) when auth required
+            assert resp.status_code == 401, f"Expected 401 for unauthorized API access, got {resp.status_code}"
+            assert resp.is_json, "API error response must be JSON"
+            data = resp.get_json()
+            assert data.get('success') is False or 'error' in data, "Error response must indicate failure"
     
     def test_list_backups_success(self, authenticated_client, temp_backup_dir):
         """Test successful backup listing"""
@@ -284,10 +299,13 @@ class TestBackupsAPI:
 class TestSettingsAPI:
     """Test /api/settings endpoints"""
     
-    def test_get_settings_requires_auth(self, client):
+    def test_get_settings_requires_auth(self, client, monkeypatch):
         """Test that get settings requires authentication"""
-        os.environ.setdefault("GUI_USERNAME", "admin")
-        os.environ.setdefault("GUI_PASSWORD", "password")
+        # Set up authentication requirement by patching Config directly
+        from app.config import Config
+        monkeypatch.setattr(Config, 'GUI_USERNAME', 'admin')
+        monkeypatch.setattr(Config, 'GUI_PASSWORD', 'password')
+        monkeypatch.setattr(Config, 'RADIUS_ENABLED', False)
         
         resp = client.get('/api/settings')
         # API endpoint should return 401 (not redirect) when auth required

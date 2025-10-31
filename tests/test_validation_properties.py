@@ -346,15 +346,15 @@ class TestTimezoneValidation:
         if is_valid:
             assert error is None
     
-    @given(st.text().filter(lambda x: len(x) > 100))
+    @given(st.text(min_size=101, max_size=200))
+    @settings(suppress_health_check=[HealthCheck.filter_too_much])
     def test_long_timezone_strings_rejected(self, timezone):
         """Test that timezone strings exceeding max length are rejected"""
         from app.validators import validate_timezone
         
-        if len(timezone) > 100:
-            is_valid, error = validate_timezone(timezone)
-            assert is_valid is False
-            assert error is not None
+        is_valid, error = validate_timezone(timezone)
+        assert is_valid is False
+        assert error is not None
 
 
 class TestListOfStringsValidation:
@@ -381,15 +381,15 @@ class TestListOfStringsValidation:
             assert is_valid is False
             assert error is not None
     
-    @given(st.lists(st.text(), min_size=201))
+    @given(st.lists(st.text(), min_size=201, max_size=250))
+    @settings(suppress_health_check=[HealthCheck.too_slow], max_examples=10)
     def test_large_lists_rejected(self, value):
         """Test that lists exceeding max size are rejected"""
         from app.validators import validate_list_of_strings
         
-        if len(value) > 200:
-            is_valid, error = validate_list_of_strings(value, max_items=200)
-            assert is_valid is False
-            assert error is not None
+        is_valid, error = validate_list_of_strings(value, max_items=200)
+        assert is_valid is False
+        assert error is not None
     
     @given(st.text() | st.integers() | st.booleans())
     def test_non_lists_rejected(self, value):

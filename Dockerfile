@@ -3,6 +3,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies
+# Note: libxslt1-dev CVE-2025-7425 - no fixed version available yet (monitoring for updates)
+# Consider updating base image or manually installing fixed version when available
 RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libxslt1-dev \

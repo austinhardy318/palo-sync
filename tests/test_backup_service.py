@@ -6,9 +6,7 @@ Tests backup listing, creation, and deletion
 import os
 import pytest
 from pathlib import Path
-from datetime import datetime
-from unittest.mock import Mock, patch
-from app.exceptions import NotFoundError, BackupError
+from app.exceptions import BackupError
 
 
 @pytest.fixture
@@ -28,7 +26,7 @@ class TestBackupServiceInitialization:
         backup_dir = tmp_path / "new_backups"
         assert not backup_dir.exists()
         
-        service = BackupService(str(backup_dir))
+        BackupService(str(backup_dir))
         
         assert backup_dir.exists()
         assert backup_dir.is_dir()
@@ -278,18 +276,15 @@ class TestBackupDeletion:
 class TestBackupServiceErrorHandling:
     """Test error handling in backup service"""
     
-    def test_create_backup_io_error(self, backup_service, monkeypatch):
+    def test_create_backup_io_error(self, backup_service):
         """Test handling of IO errors during backup creation"""
-        # Make backup directory read-only
-        backup_service.backup_dir.chmod(0o444)
+        # Mock open to raise IOError
+        from unittest.mock import patch
         
-        try:
+        with patch('builtins.open', side_effect=IOError("Permission denied")):
             result = backup_service.create_lab_backup('<config>test</config>')
             # Should return None on error
             assert result is None
-        finally:
-            # Restore permissions
-            backup_service.backup_dir.chmod(0o755)
     
     def test_list_backups_os_error(self, backup_service, monkeypatch):
         """Test handling of OS errors during listing"""
@@ -310,17 +305,20 @@ class TestBackupServiceErrorHandling:
         backup_file = backup_service.backup_dir / "test_backup.xml"
         backup_file.write_text('<config>test</config>')
         
-        # Remove write permissions from directory
-        backup_service.backup_dir.chmod(0o555)  # Read and execute only
+        # Mock Path.unlink to raise OSError
+        from unittest.mock import patch
         
         try:
-            with pytest.raises(BackupError):
-                backup_service.delete_backup(str(backup_file))
+            with patch('pathlib.Path.unlink', side_effect=OSError("Permission denied")):
+                with pytest.raises(BackupError):
+                    backup_service.delete_backup(str(backup_file))
         finally:
-            # Restore permissions
-            backup_service.backup_dir.chmod(0o755)
+            # Clean up: restore original unlink and remove file if it still exists
             if backup_file.exists():
-                backup_file.unlink()
+                try:
+                    backup_file.unlink()
+                except (OSError, PermissionError):
+                    pass
 
 
 class TestBackupServiceConcurrency:
